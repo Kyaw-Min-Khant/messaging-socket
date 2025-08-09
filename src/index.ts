@@ -38,7 +38,7 @@ const startServer = async () => {
     server.listen(PORT, () => {
       console.log(`🚀 Real-time messaging server running on port ${PORT}`);
       console.log(`📡 Socket.IO server ready for connections`);
-      console.log(`🌐 API available at http://localhost:${PORT}`);
+      console.log(`🌐 API available at http://localhost:${PORT}/api-docs`);
       console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   } catch (error) {

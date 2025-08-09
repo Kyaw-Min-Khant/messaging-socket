@@ -21,6 +21,7 @@ A real-time chat application server built with Node.js, Express, TypeScript, and
 
 1. Clone or download this project
 2. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -29,7 +30,17 @@ A real-time chat application server built with Node.js, Express, TypeScript, and
    ```bash
    PORT=3001
    CLIENT_URL=http://localhost:3000
-   NODE_ENV=development
+   NODE_ENV=development,
+   MONGODB_URI,
+   JWT_SECRET,
+   FIREBASE_PROJECT_ID,
+   FIREBASE_PRIVATE_KEY_ID
+   FIREBASE_CLIENT_EMAIL,
+   FIREBASE_CLIENT_ID,
+   REDIS_URL,
+   REDIS_PASSWORD,
+   REDIS_PORT,
+   JWT_EXPIRES_IN
    ```
 
 ## Available Scripts
@@ -42,6 +53,7 @@ A real-time chat application server built with Node.js, Express, TypeScript, and
 ## Development
 
 Start the development server:
+
 ```bash
 npm run dev
 ```
@@ -51,6 +63,7 @@ The server will start on `http://localhost:3001` (or the port specified in your 
 ## API Endpoints
 
 ### REST API
+
 - `GET /` - Server status and info
 - `GET /api/users` - Get all connected users
 - `GET /api/rooms` - Get all active rooms
@@ -58,27 +71,32 @@ The server will start on `http://localhost:3001` (or the port specified in your 
 ### Socket.IO Events
 
 #### Client to Server
+
 - `join` - Join a chat room
+
   ```javascript
-  socket.emit('join', { username: 'John', room: 'general' });
+  socket.emit("join", { username: "John", room: "general" });
   ```
 
 - `sendMessage` - Send a message
+
   ```javascript
-  socket.emit('sendMessage', { message: 'Hello world!', room: 'general' });
+  socket.emit("sendMessage", { message: "Hello world!", room: "general" });
   ```
 
 - `typing` - Send typing indicator
+
   ```javascript
-  socket.emit('typing', { isTyping: true, room: 'general' });
+  socket.emit("typing", { isTyping: true, room: "general" });
   ```
 
 - `changeRoom` - Change to a different room
   ```javascript
-  socket.emit('changeRoom', { newRoom: 'random' });
+  socket.emit("changeRoom", { newRoom: "random" });
   ```
 
 #### Server to Client
+
 - `userJoined` - User joined the room
 - `userLeft` - User left the room
 - `newMessage` - New message received
@@ -90,27 +108,27 @@ The server will start on `http://localhost:3001` (or the port specified in your 
 Here's a basic example of how to connect from a client:
 
 ```javascript
-import { io } from 'socket.io-client';
+import { io } from "socket.io-client";
 
-const socket = io('http://localhost:3001');
+const socket = io("http://localhost:3001");
 
 // Join a room
-socket.emit('join', { username: 'YourName', room: 'general' });
+socket.emit("join", { username: "YourName", room: "general" });
 
 // Listen for messages
-socket.on('newMessage', (message) => {
-  console.log('New message:', message);
+socket.on("newMessage", (message) => {
+  console.log("New message:", message);
 });
 
 // Send a message
-socket.emit('sendMessage', { message: 'Hello everyone!' });
+socket.emit("sendMessage", { message: "Hello everyone!" });
 
 // Listen for user events
-socket.on('userJoined', (data) => {
+socket.on("userJoined", (data) => {
   console.log(`${data.username} joined the chat`);
 });
 
-socket.on('userLeft', (data) => {
+socket.on("userLeft", (data) => {
   console.log(`${data.username} left the chat`);
 });
 ```
@@ -135,6 +153,7 @@ socket.on('userLeft', (data) => {
 ## Building for Production
 
 1. Build the TypeScript code:
+
    ```bash
    npm run build
    ```
@@ -154,4 +173,4 @@ socket.on('userLeft', (data) => {
 
 ## License
 
-ISC 
+ISC

@@ -1,7 +1,6 @@
 import { Server } from 'socket.io';
 import { redisClient } from '../config/redis';
 
-
 export function registerSocketHandlers(io: Server) {
     io.on('connection', (socket) => {
         console.log(`🔌 User connected: ${socket.id}`);
