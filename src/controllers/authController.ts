@@ -1,46 +1,44 @@
-import { Request, Response } from 'express';
-import User from '../models/User';
-import { AuthRequest, RegisterRequest, LoginRequest } from '../types';
-
-
-
-
+import { Request, Response } from "express";
+import User from "../models/User";
+import { AuthRequest, RegisterRequest, LoginRequest } from "../types";
 
 export const register = async (req: Request, res: Response) => {
   const { username, email, password }: RegisterRequest = req.body;
-  if(!username || !email || !password) {
+  if (!username || !email || !password) {
     return res.status(400).json({
       success: false,
-      error: 'Username, email and password are required'
+      error: "Username, email and password are required",
+    });
+  }
+  if (username.length < 3 || password.length < 6) {
+    return res.status(400).json({
+      success: false,
+      error:
+        " User validation failed: username: Username must be at least 3 characters long, password: Password must be at least 6 characters long",
     });
   }
   try {
-   
-    // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email }, { username }],
     });
 
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        error: 'User with this email or username already exists'
+        error: "User with this email or username already exists",
       });
     }
-
-    // Create new user
     const user = new User({
       username,
       email,
-      password
+      password,
     });
 
     await user.save();
 
-    // Generate JWT token
     const token = user.generateAuthToken();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: {
         user: {
@@ -48,17 +46,17 @@ export const register = async (req: Request, res: Response) => {
           username: user.username,
           email: user.email,
           avatar: user.avatar,
-          isOnline: user.isOnline
+          isOnline: user.isOnline,
         },
-        token
+        token,
       },
-      message: 'User registered successfully'
+      message: "User registered successfully",
     });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({
+    console.error("Register error:", error);
+    return res.status(500).json({
       success: false,
-      error: 'Server error'
+      error: error instanceof Error ? error.message : "Server error",
     });
   }
 };
@@ -69,10 +67,10 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password }: LoginRequest = req.body;
-    if(!email || !password) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required'
+        error: "Email and password are required",
       });
     }
     // Find user by email
@@ -80,7 +78,7 @@ export const login = async (req: Request, res: Response) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid credentials'
+        error: "Invalid credentials",
       });
     }
 
@@ -89,7 +87,7 @@ export const login = async (req: Request, res: Response) => {
     if (!isPasswordValid) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid credentials'
+        error: "Invalid credentials",
       });
     }
 
@@ -101,7 +99,7 @@ export const login = async (req: Request, res: Response) => {
     // Generate JWT token
     const token = user.generateAuthToken();
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         user: {
@@ -109,17 +107,17 @@ export const login = async (req: Request, res: Response) => {
           username: user.username,
           email: user.email,
           avatar: user.avatar,
-          isOnline: user.isOnline
+          isOnline: user.isOnline,
         },
-        token
+        token,
       },
-      message: 'Login successful'
+      message: "Login successful",
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
+    console.error("Login error:", error);
+    return res.status(500).json({
       success: false,
-      error: 'Server error'
+      error: "Server error",
     });
   }
 };
@@ -130,15 +128,15 @@ export const login = async (req: Request, res: Response) => {
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'User not found'
+        error: "User not found",
       });
     }
-    
-    res.json({
+
+    return res.json({
       success: true,
       data: {
         user: {
@@ -147,15 +145,15 @@ export const getMe = async (req: AuthRequest, res: Response) => {
           email: user.email,
           avatar: user.avatar,
           isOnline: user.isOnline,
-          lastSeen: user.lastSeen
-        }
-      }
+          lastSeen: user.lastSeen,
+        },
+      },
     });
   } catch (error) {
-    console.error('Get me error:', error);
-    res.status(500).json({
+    console.error("Get me error:", error);
+    return res.status(500).json({
       success: false,
-      error: 'Server error'
+      error: "Server error",
     });
   }
 };
@@ -166,28 +164,28 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 export const logout = async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'User not found'
+        error: "User not found",
       });
     }
-    
+
     // Update online status
     user.isOnline = false;
     user.lastSeen = new Date();
     await (user as any).save();
 
-    res.json({
+    return res.json({
       success: true,
-      message: 'Logout successful'
+      message: "Logout successful",
     });
   } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({
+    console.error("Logout error:", error);
+    return res.status(500).json({
       success: false,
-      error: 'Server error'
+      error: "Server error",
     });
   }
-}; 
+};
