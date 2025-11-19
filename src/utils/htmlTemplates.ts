@@ -214,7 +214,7 @@ export const getErrorHTML = (statusCode: number, message: string) => `
     </div>
 </body>
 </html>
-`; 
+`;
 
 export const getWelcomeHTML = () => `
 <!DOCTYPE html>
@@ -261,17 +261,24 @@ export const getWelcomeHTML = () => `
     .actions {
       display: flex;
       flex-direction: column;
-      gap: 1em;
-      margin-bottom: 1em;
+      gap: 1.5em;
+      margin-vertical: 2em;
     }
+
+    .action-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5em;
+    }
+
     .actions a {
       display: block;
-      padding: 0.9em 0;
+      padding: 10px;
       border-radius: 8px;
-      background: linear-gradient(90deg, #667eea 60%, #764ba2 100%);
+      background: #667eea;
       color: #fff;
       font-size: 1.1em;
-      font-weight: 600;
+      font-weight: 500;
       text-decoration: none;
       box-shadow: 0 2px 8px rgba(102,126,234,0.10);
       transition: background 0.2s, transform 0.2s;
@@ -280,6 +287,13 @@ export const getWelcomeHTML = () => `
       background: linear-gradient(90deg, #764ba2 60%, #667eea 100%);
       transform: translateY(-2px) scale(1.03);
     }
+
+    .sub-desc {
+      font-size: 0.9em;
+      color: #cfcfcf;
+      margin-top: -0.3em;
+    }
+
     .footer {
       margin-top: 2em;
       font-size: 0.95em;
@@ -302,15 +316,29 @@ export const getWelcomeHTML = () => `
     <div class="desc">
       Welcome to your real-time Messenger app!<br>
       Chat instantly, securely, and beautifully.<br>
-      <span style="color:#8ab4f8;">Connect. Converse. Enjoy.</span>
     </div>
+
     <div class="actions">
-    
+
+      <div class="action-box">
+        <a href="/api-docs" target="_blank">API Documentation</a>
+        <div class="sub-desc">View full backend API reference (Swagger UI).</div>
+      </div>
+
+      <div class="action-box">
+        <a href="https://messaging-app-8bbd6.web.app/login.html" target="_blank">Demo Web App</a>
+        <div class="sub-desc">Try the live demo version of the Messenger web app.</div>
+      </div>
+
     </div>
     <div class="footer">
+    <div>
+    <span style="color:#8ab4f8;">Connect. Converse. Enjoy.</span>
+    </div>
       &copy; <span id="year"></span> Messenger &mdash; Powered by Node.js, Express, MongoDB, Socket.IO
     </div>
   </div>
+
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
   </script>

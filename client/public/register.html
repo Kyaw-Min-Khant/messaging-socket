@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register - Messenger</title>
+    <style>
+      body {
+        background: linear-gradient(135deg, #232526 0%, #414345 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Segoe UI", "Roboto", Arial, sans-serif;
+      }
+      .container {
+        background: #18191a;
+        padding: 2.5em 2em 2em 2em;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+        width: 100%;
+        max-width: 350px;
+      }
+      h2 {
+        color: #fff;
+        margin-bottom: 1.2em;
+        text-align: center;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 1em;
+      }
+      input {
+        padding: 0.8em 1em;
+        border-radius: 6px;
+        border: 1px solid #333;
+        background: #232526;
+        color: #e4e6eb;
+        font-size: 1em;
+        outline: none;
+      }
+      input:focus {
+        border: 1.5px solid #667eea;
+      }
+      button {
+        background: #667eea;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 0.8em 1em;
+        font-size: 1em;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: #764ba2;
+      }
+      .switch {
+        text-align: center;
+        margin-top: 1em;
+      }
+      .switch a {
+        color: #8ab4f8;
+        text-decoration: none;
+      }
+      .switch a:hover {
+        text-decoration: underline;
+      }
+      .msg {
+        text-align: center;
+        margin-bottom: 1em;
+        font-size: 0.98em;
+      }
+      .msg.error {
+        color: #f44336;
+      }
+      .msg.success {
+        color: #4caf50;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Register</h2>
+      <div id="msg" class="msg"></div>
+      <form id="registerForm">
+        <input
+          type="text"
+          id="username"
+          placeholder="Username"
+          required
+          minlength="3"
+          maxlength="30"
+        />
+        <input type="email" id="email" placeholder="Email" required />
+        <input
+          type="password"
+          id="password"
+          placeholder="Password"
+          required
+          minlength="6"
+        />
+        <button type="submit">Register</button>
+      </form>
+      <div class="switch">
+        Already have an account? <a href="login.html">Login</a>
+      </div>
+    </div>
+    <script>
+      document
+        .getElementById("registerForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+          const msg = document.getElementById("msg");
+          msg.textContent = "";
+          msg.className = "msg";
+          const username = document.getElementById("username").value.trim();
+          const email = document.getElementById("email").value.trim();
+          const password = document.getElementById("password").value;
+          try {
+            const res = await fetch(
+              "https://messaging-socket.onrender.com/v1/api/auth/register",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, email, password }),
+              }
+            );
+            const data = await res.json();
+            if (res.ok) {
+              msg.textContent = "Registration successful! You can now login.";
+              msg.className = "msg success";
+              setTimeout(() => {
+                window.location = "login.html";
+              }, 1200);
+            } else {
+              msg.textContent = data.message || "Registration failed.";
+              msg.className = "msg error";
+            }
+          } catch (err) {
+            msg.textContent = "Network error.";
+            msg.className = "msg error";
+          }
+        });
+    </script>
+  </body>
+</html>
