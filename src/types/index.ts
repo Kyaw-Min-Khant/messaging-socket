@@ -1,8 +1,9 @@
-import { Document } from 'mongoose';
-import mongoose from 'mongoose';
+import { Document } from "mongoose";
+import mongoose from "mongoose";
 
 // User related types
 export interface IUser {
+  id?: mongoose.Types.ObjectId;
   username: string;
   email: string;
   password: string;
@@ -14,18 +15,18 @@ export interface IUser {
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-export interface IUserDocument extends IUser, Document {}
+export interface IUserDocument extends Omit<IUser, "id">, Document {}
 
 // Message related types
 export interface IMessage {
   sender: mongoose.Types.ObjectId;
   conversation: mongoose.Types.ObjectId;
   content: string;
-  messageType: 'text' | 'image' | 'audio' | 'file';
+  messageType: "text" | "image" | "audio" | "file";
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
-  status: 'sent' | 'delivered' | 'seen';
+  status: "sent" | "delivered" | "seen";
   deliveredAt?: Date;
   seenAt?: Date;
   createdAt: Date;
@@ -49,19 +50,35 @@ export interface IConversationDocument extends IConversation, Document {}
 export interface SocketEvents {
   // Client to Server
   join: (data: { userId: string; token: string }) => void;
-  sendMessage: (data: { conversationId: string; content: string; messageType: string; fileUrl?: string }) => void;
+  sendMessage: (data: {
+    conversationId: string;
+    content: string;
+    messageType: string;
+    fileUrl?: string;
+  }) => void;
   typing: (data: { conversationId: string; isTyping: boolean }) => void;
   markAsSeen: (data: { messageId: string; conversationId: string }) => void;
-  markAsDelivered: (data: { messageId: string; conversationId: string }) => void;
-  
+  markAsDelivered: (data: {
+    messageId: string;
+    conversationId: string;
+  }) => void;
+
   // Server to Client
   userJoined: (data: { userId: string; username: string }) => void;
   userLeft: (data: { userId: string; username: string }) => void;
   newMessage: (data: IMessage) => void;
-  userTyping: (data: { userId: string; username: string; isTyping: boolean; conversationId: string }) => void;
+  userTyping: (data: {
+    userId: string;
+    username: string;
+    isTyping: boolean;
+    conversationId: string;
+  }) => void;
   messageDelivered: (data: { messageId: string; deliveredAt: Date }) => void;
   messageSeen: (data: { messageId: string; seenAt: Date }) => void;
-  conversationUpdate: (data: { conversationId: string; lastMessage: IMessage }) => void;
+  conversationUpdate: (data: {
+    conversationId: string;
+    lastMessage: IMessage;
+  }) => void;
 }
 
 // API Response types
@@ -74,6 +91,8 @@ export interface ApiResponse<T = any> {
 
 // Authentication types
 export interface AuthRequest extends Request {
+  query: any;
+  body: any;
   user?: IUser;
 }
 
@@ -111,10 +130,16 @@ export interface LoginRequest {
 export interface CreateMessageRequest {
   conversationId: string;
   content: string;
-  messageType: 'text' | 'image' | 'audio' | 'file';
+  messageType: "text" | "image" | "audio" | "file";
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
+}
+
+interface QueryRequest {
+  page?: string;
+  limit?: string;
+  search?: string;
 }
 
 // Environment variables interface
@@ -131,4 +156,4 @@ export interface EnvironmentVariables {
   REDIS_URL: string;
   UPLOAD_PATH: string;
   MAX_FILE_SIZE: string;
-} 
+}

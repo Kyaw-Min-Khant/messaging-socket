@@ -121,7 +121,7 @@
           const password = document.getElementById("password").value;
           try {
             const res = await fetch(
-              "https://messaging-socket.onrender.com/v1/api/auth/register",
+              "http://localhost:3000/v1/api/auth/register",
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

@@ -267,15 +267,20 @@
       let typingTimeout;
 
       function authenticate() {
+        const user_data = JSON.parse(localStorage.getItem("user_data"));
+        console.log(user_data, " Data");
         if (authenticated) return;
-        socket = io("https://messaging-socket.onrender.com");
+        socket = io("http://localhost:3000/");
         const username = document.getElementById("username").value;
         if (!username.trim()) {
           alert("Please enter a username");
           return;
         }
 
-        socket.emit("authenticate", { username });
+        socket.emit("authenticate", {
+          username: user_data.username,
+          userId: user_data.id,
+        });
 
         socket.on("authenticated", (data) => {
           currentUser = data.user;

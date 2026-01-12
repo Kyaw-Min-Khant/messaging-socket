@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import { redisClient } from "../config/redis";
+import Message from "../models/Message";
 
 export function registerSocketHandlers(io: Server) {
   {
@@ -85,13 +86,14 @@ export function registerSocketHandlers(io: Server) {
           try {
             const userStr = await redisClient.hGet("connectedUsers", socket.id);
             const user = userStr ? JSON.parse(userStr) : null;
+
             if (!user) {
               socket.emit("error", { message: "User not authenticated" });
               return;
             }
 
             const messageData = {
-              id: Date.now().toString(), // Simple message ID
+              id: Date.now().toString(),
               senderId: user.userId || user.id,
               senderUsername: user.username,
               recipientId: data.recipientId,
@@ -107,14 +109,14 @@ export function registerSocketHandlers(io: Server) {
             // Save message to database if userId is provided
             if (data.userId) {
               // TODO: Save message to MongoDB
-              // const newMessage = new Message({
-              //   sender: data.userId,
-              //   recipient: data.recipientId,
-              //   conversationId: messageData.conversationId,
-              //   content: data.message,
-              //   messageType: data.messageType || 'text'
-              // });
-              // await newMessage.save();
+              const newMessage = new Message({
+                sender: data.userId,
+                recipient: data.recipientId,
+                conversationId: messageData.conversationId,
+                content: data.message,
+                messageType: data.messageType || "text",
+              });
+              await newMessage.save();
             }
 
             // Send to recipient if they're online

@@ -13,6 +13,7 @@ import {
 } from "./utils/htmlTemplates";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
+import { errorHandler } from "./middleware/error_middleware";
 dotenv.config();
 
 const app = express();
@@ -42,13 +43,18 @@ const options = {
 const swaggerSpec = swaggerJsdoc(options);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin:
+      process.env.CLIENT_URL ||
+      "http://localhost:3000" ||
+      "http://192.168.100.7:3000",
     credentials: true,
   })
 );
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -74,6 +80,8 @@ app.get("/", (req, res) => {
     });
   }
 });
+
+app.use(errorHandler);
 
 // Error handling middleware
 app.use(
