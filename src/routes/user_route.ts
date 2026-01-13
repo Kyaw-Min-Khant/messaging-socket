@@ -5,7 +5,6 @@ import {
   getFriendListController,
   getFriendRequestListController,
   getMobileUserListController,
-  getUserController,
 } from "../controllers/users_controller";
 import { auth } from "../middleware/auth";
 

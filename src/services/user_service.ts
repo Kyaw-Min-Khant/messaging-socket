@@ -6,10 +6,15 @@ import Friend from "../models/Friend";
 
 class UserService {
   async getAllUserListForMobile(id: mongoose.Types.ObjectId) {
-    const userList = await User.find()
-      .where("_id")
-      .ne(id)
-      .select("username avatar isOnline lastSeen");
+    const relations = await Friend.find({
+      $or: [{ requester: id }, { receiver: id }],
+    });
+    const excludedUserIds = relations.flatMap((rel) =>
+      rel.requester.equals(id) ? rel.receiver : rel.requester
+    );
+    const userList = await User.find({
+      _id: { $nin: [id, ...excludedUserIds] },
+    }).select(" username avatar isOnline lastSeen");
     return userList;
   }
 
@@ -21,7 +26,6 @@ class UserService {
       requester: requester_id,
       receiver: receiver_id,
     });
-    console.log("friendRequest", friendRequest);
 
     if (friendRequest) {
       throw new ValidationError("Friend request already sent");
@@ -50,11 +54,15 @@ class UserService {
   }
 
   async getFriendList(user_id: mongoose.Types.ObjectId) {
-    const friendsList = await Friend.find({
+    const releations = await Friend.find({
       $or: [{ requester: user_id }, { receiver: user_id }],
       status: "accepted",
     }).populate("requester receiver", "username avatar isOnline lastSeen");
-    return friendsList;
+
+    const friends = releations.map((rel) =>
+      rel.requester._id.equals(user_id) ? rel.receiver : rel.requester
+    );
+    return friends;
   }
 }
 
