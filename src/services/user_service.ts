@@ -42,7 +42,9 @@ class UserService {
     const friendRequests = await Firend.find({
       receiver: user_id,
       status: "pending",
-    }).populate("requester", "username avatar isOnline lastSeen");
+    })
+      .populate("requester", "username avatar isOnline lastSeen")
+      .select("_id requester status createdAt");
     return friendRequests;
   }
 

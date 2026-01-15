@@ -66,7 +66,6 @@ export const getFriendRequestListController = async (
     const firendsRequestList = await user_service.getFriendRequestList(
       req?.user.id
     );
-    console.log(firendsRequestList, "Fri List");
     res.status(200).json({
       data: firendsRequestList,
     });
