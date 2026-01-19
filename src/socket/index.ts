@@ -3,13 +3,12 @@ import { redisClient } from "../config/redis";
 import Message from "../models/Message";
 import User from "../models/User";
 import Conversation from "../models/Conversation";
+import fcm_service from "../services/fcm_service";
 
 export function registerSocketHandlers(io: Server) {
   {
     io.on("connection", (socket) => {
       console.log(`🔌 User connected: ${socket.id}`);
-
-      // Handle user authentication/login (no room joining needed)
       socket.on(
         "authenticate",
         async (data: { username: string; userId?: string }) => {
@@ -27,7 +26,7 @@ export function registerSocketHandlers(io: Server) {
             await redisClient.hSet(
               "connectedUsers",
               socket.id,
-              JSON.stringify(user)
+              JSON.stringify(user),
             );
             // If userId is provided, also store by userId for easy lookup
             if (data.userId) {
@@ -67,85 +66,15 @@ export function registerSocketHandlers(io: Server) {
             console.log(
               `✅ ${data.username} authenticated (${
                 data.userId || "no userId"
-              })`
+              })`,
             );
           } catch (error) {
             console.error("Error in authenticate event:", error);
             socket.emit("error", { message: "Failed to authenticate" });
           }
-        }
+        },
       );
 
-      // Handle direct messages (Messenger-style)
-      // socket.on(
-      //   "sendDirectMessage",
-      //   async (data: {
-      //     recipientId: string;
-      //     message: string;
-      //     conversationId?: string;
-      //     messageType?: string;
-      //     userId?: string;
-      //   }) => {
-      //     try {
-      //       const userStr = await redisClient.hGet("connectedUsers", socket.id);
-      //       console.log("connected user", userStr);
-      //       const user = userStr ? JSON.parse(userStr) : null;
-
-      //       if (!user) {
-      //         socket.emit("error", { message: "User not authenticated" });
-      //         return;
-      //       }
-
-      //       const messageData = {
-      //         id: Date.now().toString(),
-      //         senderId: user.userId || user.id,
-      //         senderUsername: user.username,
-      //         recipientId: data.recipientId,
-      //         conversationId:
-      //           data.conversationId ||
-      //           `${user.userId || user.id}-${data.recipientId}`,
-      //         message: data.message,
-      //         messageType: data.messageType || "text",
-      //         timestamp: new Date().toISOString(),
-      //         status: "sent",
-      //       };
-      //       console.log(messageData, "Message Data");
-      //       // console.log(data.userId, "User ID in socket message");
-      //       // Save message to database if userId is provided
-      //       if (data.userId) {
-      //         // TODO: Save message to MongoDB
-      //         const newMessage = new Message({
-      //           sender: data.userId,
-      //           recipient: data.recipientId,
-      //           conversationId: messageData.conversationId,
-      //           content: data.message,
-      //           messageType: data.messageType || "text",
-      //         });
-      //         await newMessage.save();
-      //       }
-
-      //       // Send to recipient if they're online
-      //       const recipientSocketId = await redisClient.hGet(
-      //         "userSockets",
-      //         data.recipientId
-      //       );
-      //       if (recipientSocketId) {
-      //         io.to(recipientSocketId).emit("newDirectMessage", messageData);
-      //         messageData.status = "delivered";
-      //       }
-
-      //       // Send confirmation back to sender
-      //       socket.emit("messageSent", messageData);
-
-      //       console.log(
-      //         `💬 Direct message from ${user.username} to ${data.recipientId}: ${data.message}`
-      //       );
-      //     } catch (error) {
-      //       console.error("Error in sendDirectMessage event:", error);
-      //       socket.emit("error", { message: "Failed to send message" });
-      //     }
-      //   }
-      // );
       socket.on(
         "sendDirectMessage",
         async (data: {
@@ -154,7 +83,6 @@ export function registerSocketHandlers(io: Server) {
           messageType?: string;
         }) => {
           try {
-            // 1️⃣ Get authenticated user
             const userStr = await redisClient.hGet("connectedUsers", socket.id);
             const user = userStr ? JSON.parse(userStr) : null;
 
@@ -184,7 +112,6 @@ export function registerSocketHandlers(io: Server) {
               status: "sent",
             });
 
-            // 4️⃣ Prepare payload for socket
             const messagePayload = {
               _id: newMessage._id,
               conversationId: conversation._id,
@@ -196,13 +123,10 @@ export function registerSocketHandlers(io: Server) {
               timestamp: newMessage.createdAt,
               status: "sent",
             };
-            console.log(messagePayload, "Message Payload");
-            // 5️⃣ Emit to recipient if online
             const recipientSocketId = await redisClient.hGet(
               "userSockets",
-              data.recipientId
+              data.recipientId,
             );
-            console.log(recipientSocketId, "Socket Id");
 
             if (recipientSocketId) {
               io.to(recipientSocketId).emit("newDirectMessage", {
@@ -215,17 +139,23 @@ export function registerSocketHandlers(io: Server) {
               });
             }
 
-            // 6️⃣ Emit confirmation to sender
             socket.emit("messageSent", messagePayload);
-
+            let userData = await User.findById(data.recipientId);
+            if (userData && userData.fcmtoken) {
+              const fcmResponse = await fcm_service.sendNotificationById(
+                userData.fcmtoken,
+                user.username as string,
+                data.message as string,
+              );
+            }
             console.log(
-              `💬 ${user.username} → ${data.recipientId}: ${data.message}`
+              `💬 ${user.username} → ${data.recipientId}: ${data.message}`,
             );
           } catch (error) {
             console.error("❌ sendDirectMessage error:", error);
             socket.emit("error", { message: "Failed to send message" });
           }
-        }
+        },
       );
 
       // Handle typing indicator for direct messages
@@ -238,7 +168,7 @@ export function registerSocketHandlers(io: Server) {
 
           const recipientSocketId = await redisClient.hGet(
             "userSockets",
-            data.recipientId
+            data.recipientId,
           );
           if (recipientSocketId) {
             io.to(recipientSocketId).emit("userTyping", {
@@ -247,7 +177,7 @@ export function registerSocketHandlers(io: Server) {
               isTyping: data.isTyping,
             });
           }
-        }
+        },
       );
 
       // Handle message read receipts
@@ -260,7 +190,7 @@ export function registerSocketHandlers(io: Server) {
 
           const senderSocketId = await redisClient.hGet(
             "userSockets",
-            data.senderId
+            data.senderId,
           );
           if (senderSocketId) {
             io.to(senderSocketId).emit("messageRead", {
@@ -271,26 +201,25 @@ export function registerSocketHandlers(io: Server) {
           }
 
           // TODO: Update message status in database
-        }
+        },
       );
       // Handle disconnection
       socket.on("disconnect", async () => {
         const userStr = await redisClient.hGet("connectedUsers", socket.id);
         const user = userStr ? JSON.parse(userStr) : null;
         if (user) {
-          // Update user offline status in database if userId is provided
           if (user.userId) {
-            // TODO: Update user offline status in MongoDB
-            // await User.findByIdAndUpdate(user.userId, { isOnline: false, lastSeen: new Date() });
+            await User.findByIdAndUpdate(user.userId, {
+              isOnline: false,
+              lastSeen: new Date(),
+            });
           }
 
-          // Remove from Redis
           await redisClient.hDel("connectedUsers", socket.id);
           if (user.userId) {
             await redisClient.hDel("userSockets", user.userId);
           }
 
-          // Notify all other users that this user is offline
           socket.broadcast.emit("userOffline", {
             id: user.userId || user.id,
             username: user.username,

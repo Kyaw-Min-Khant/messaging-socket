@@ -6,11 +6,10 @@ import { AuthRequest, JwtPayload } from "../types";
 export const auth = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const token = (req.headers as any).authorization?.replace("Bearer ", "");
-
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -47,7 +46,7 @@ export const auth = async (
 export const optionalAuth = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const token = (req.headers as any).authorization?.replace("Bearer ", "");

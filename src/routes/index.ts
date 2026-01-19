@@ -1,6 +1,7 @@
 import { Router } from "express";
 import authRoutes from "./auth";
 import user_routes from "./user_route";
+import message_routes from "./message_route";
 const router = Router();
 
 router.get("/health", (req, res) => {
@@ -14,6 +15,7 @@ router.get("/health", (req, res) => {
 // API routes
 router.use("/auth", authRoutes);
 router.use("/users", user_routes);
+router.use("/conversations", message_routes);
 // TODO: Add more routes
 // router.use('/users', userRoutes);
 // router.use('/conversations', conversationRoutes);

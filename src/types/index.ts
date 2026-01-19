@@ -7,6 +7,7 @@ export interface IUser {
   username: string;
   email: string;
   password: string;
+  fcmToken?: string;
   avatar?: string;
   isOnline: boolean;
   lastSeen: Date;
@@ -93,6 +94,7 @@ export interface ApiResponse<T = any> {
 export interface AuthRequest extends Request {
   query: any;
   body: any;
+  params: any;
   user?: IUser;
 }
 
@@ -125,6 +127,7 @@ export interface RegisterRequest {
 export interface LoginRequest {
   email: string;
   password: string;
+  fcmtoken: string;
 }
 
 export interface CreateMessageRequest {

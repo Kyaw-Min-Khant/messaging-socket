@@ -5,19 +5,11 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "../services/custom_error_service";
-const ProfleImages = [
-  "https://img.freepik.com/premium-vector/female-face-icon-flat-vector-design-woman-girl-profile-design-template-identity-concept_581136-214.jpg",
-  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRH87TKQrWcl19xly2VNs0CjBzy8eaKNM-ZpA&s",
-  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQyoGULN1LceEjH8Ek-RLyigv6HJm-UFYfZmg&s",
-  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQnYh79e7N4rXkThhwCipY3mIfdJ6vavgRorgpEWZgVDw&s",
-  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ8wR88BF7EWiIPx0AczdbsXk2sRKCUIxlItyuvBc_DNg&s",
-  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1abgZFHSN1dft87SClXpEhanK9ijEKqoZAw&s",
-];
 
 export const register = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { username, email, password }: RegisterRequest = req.body;
@@ -27,7 +19,7 @@ export const register = async (
 
     if (username.length < 3 || password.length < 6) {
       throw new ValidationError(
-        "Username must be at least 3 characters long and password must be at least 6 characters long"
+        "Username must be at least 3 characters long and password must be at least 6 characters long",
       );
     }
 
@@ -52,15 +44,18 @@ export const register = async (
 export const login = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
-    const { email, password }: LoginRequest = req.body;
+    const { email, password, fcmtoken }: LoginRequest = req.body;
     if (!email || !password) {
       throw new ValidationError("Email and password are required");
     }
-
-    const { user, token } = await auth_service.login({ email, password });
+    const { user, token } = await auth_service.login({
+      email,
+      password,
+      fcmtoken,
+    });
     res.json({
       success: true,
       data: {
@@ -80,7 +75,7 @@ export const login = async (
 export const getUser = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const user = req.user;
@@ -115,7 +110,7 @@ export const getUser = async (
 export const logout = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const user = req.user;

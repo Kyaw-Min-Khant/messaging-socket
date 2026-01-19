@@ -15,7 +15,7 @@ export const getUserController = async (req: Request, res: Response) => {
 export const getMobileUserListController = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     if (!req?.user?.id) {
@@ -36,7 +36,7 @@ export const getMobileUserListController = async (
 export const addFriendController = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     if (!req?.user?.id) {
@@ -57,14 +57,14 @@ export const addFriendController = async (
 export const getFriendRequestListController = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     if (!req?.user?.id) {
       throw new UnauthorizedError("User not authenticated");
     }
     const firendsRequestList = await user_service.getFriendRequestList(
-      req?.user.id
+      req?.user.id,
     );
     res.status(200).json({
       data: firendsRequestList,
@@ -78,7 +78,7 @@ export const getFriendRequestListController = async (
 export const confirmFriRequestControoler = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { friend_id } = req.body;
@@ -99,7 +99,7 @@ export const confirmFriRequestControoler = async (
 export const getFriendListController = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     if (!req?.user?.id) {

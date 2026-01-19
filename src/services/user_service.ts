@@ -10,7 +10,7 @@ class UserService {
       $or: [{ requester: id }, { receiver: id }],
     });
     const excludedUserIds = relations.flatMap((rel) =>
-      rel.requester.equals(id) ? rel.receiver : rel.requester
+      rel.requester.equals(id) ? rel.receiver : rel.requester,
     );
     const userList = await User.find({
       _id: { $nin: [id, ...excludedUserIds] },
@@ -20,7 +20,7 @@ class UserService {
 
   async addFriend(
     requester_id: mongoose.Types.ObjectId,
-    receiver_id: mongoose.Types.ObjectId
+    receiver_id: mongoose.Types.ObjectId,
   ) {
     const friendRequest = await Firend.findOne({
       requester: requester_id,
@@ -62,7 +62,7 @@ class UserService {
     }).populate("requester receiver", "username avatar isOnline lastSeen");
 
     const friends = releations.map((rel) =>
-      rel.requester._id.equals(user_id) ? rel.receiver : rel.requester
+      rel.requester._id.equals(user_id) ? rel.receiver : rel.requester,
     );
     return friends;
   }

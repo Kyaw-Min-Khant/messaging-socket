@@ -8,6 +8,7 @@ export interface IUser extends Document {
   password: string;
   avatar?: string;
   isOnline: boolean;
+  fcmtoken: string;
   lastSeen: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -45,6 +46,10 @@ const userSchema = new Schema<IUser>(
       type: String,
       default: null,
     },
+    fcmtoken: {
+      type: String,
+      default: null,
+    },
     isOnline: {
       type: Boolean,
       default: false,
@@ -56,7 +61,7 @@ const userSchema = new Schema<IUser>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Hash password before saving
@@ -74,7 +79,7 @@ userSchema.pre("save", async function (next) {
 
 // Compare password method
 userSchema.methods.comparePassword = async function (
-  candidatePassword: string
+  candidatePassword: string,
 ): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
@@ -97,7 +102,7 @@ userSchema.methods.generateAuthToken = function (): string {
       username: this.username,
     },
     secret,
-    options
+    options,
   );
 };
 
