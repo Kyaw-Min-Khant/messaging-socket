@@ -81,11 +81,11 @@ export const confirmFriRequestControoler = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { friend_id } = req.body;
+    const { request_id } = req.body;
     if (!req?.user?.id) {
       throw new UnauthorizedError("User not authenticated");
     }
-    await user_service.confirmFriendRequest(friend_id);
+    await user_service.confirmFriendRequest(request_id);
     res.status(201).json({
       success: true,
       message: "Friend Confirm Successful",
