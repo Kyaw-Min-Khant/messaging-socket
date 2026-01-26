@@ -82,6 +82,7 @@ export function registerSocketHandlers(io: Server) {
           message: string;
           messageType?: string;
         }) => {
+          // console.log("sendDirectMessage event received:", data);
           try {
             const userStr = await redisClient.hGet("connectedUsers", socket.id);
             const user = userStr ? JSON.parse(userStr) : null;
@@ -102,13 +103,13 @@ export function registerSocketHandlers(io: Server) {
                 participants: [senderId, data.recipientId],
               });
             }
-
             const newMessage = await Message.create({
               conversation: conversation._id,
               sender: senderId,
               recipient: data.recipientId,
               content: data.message,
               messageType: data.messageType || "text",
+              fileUrl: data.message,
               status: "sent",
             });
 
@@ -148,9 +149,9 @@ export function registerSocketHandlers(io: Server) {
                 data.message as string,
               );
             }
-            console.log(
-              `💬 ${user.username} → ${data.recipientId}: ${data.message}`,
-            );
+            // console.log(
+            //   `💬 ${user.username} → ${data.recipientId}: ${data.message}`,
+            // );
           } catch (error) {
             console.error("❌ sendDirectMessage error:", error);
             socket.emit("error", { message: "Failed to send message" });
@@ -165,11 +166,21 @@ export function registerSocketHandlers(io: Server) {
           const userStr = await redisClient.hGet("connectedUsers", socket.id);
           const user = userStr ? JSON.parse(userStr) : null;
           if (!user) return;
+          const targetId = data.recipientId;
+
+          if (!targetId || typeof targetId !== "string") {
+            console.error("❌ Invalid Recipient ID received:", targetId);
+            return socket.emit("error", { message: "Invalid recipient" });
+          }
 
           const recipientSocketId = await redisClient.hGet(
             "userSockets",
-            data.recipientId,
+            targetId,
           );
+          // const recipientSocketId = await redisClient.hGet(
+          //   "userSockets",
+          //   data.recipientId,
+          // );
           if (recipientSocketId) {
             io.to(recipientSocketId).emit("userTyping", {
               senderId: user.userId || user.id,
