@@ -143,10 +143,16 @@ export function registerSocketHandlers(io: Server) {
             socket.emit("messageSent", messagePayload);
             let userData = await User.findById(data.recipientId);
             if (userData && userData.fcmtoken) {
+              const notificationMsg =
+                data.messageType === "audio"
+                  ? "Sent an audio"
+                  : data.messageType === "image"
+                    ? "Sent an image"
+                    : data.message;
               const fcmResponse = await fcm_service.sendNotificationById(
                 userData.fcmtoken,
                 user.username as string,
-                data.message as string,
+                notificationMsg as string,
               );
             }
             // console.log(
