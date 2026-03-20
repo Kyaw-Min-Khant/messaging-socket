@@ -173,4 +173,4 @@ socket.on("userLeft", (data) => {
 
 ## License
 
-ISC
+Apache License
