@@ -6,9 +6,7 @@ const MONGODB_URI = process.env.NODE_ENV === "development" ? process.env.DEV_MON
 export const connectDB = async (): Promise<void> => {
   try {
     const conn = await mongoose.connect(MONGODB_URI);
-
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-
     // Handle connection events
     mongoose.connection.on("error", (err) => {
       console.error("❌ MongoDB connection error:", err);

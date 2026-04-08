@@ -188,12 +188,13 @@ export function registerSocketHandlers(io: Server) {
           //   data.recipientId,
           // );
           if (recipientSocketId) {
-            io.to(recipientSocketId).emit("userTyping", {
+           return  io.to(recipientSocketId).emit("userTyping", {
               senderId: user.userId || user.id,
               senderUsername: user.username,
               isTyping: data.isTyping,
             });
           }
+          return null;
         },
       );
 
