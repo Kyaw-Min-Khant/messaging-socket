@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { AuthRequest, RegisterRequest, LoginRequest } from "../types";
 import auth_service from "../services/auth_service";
+import User from "../models/User";
+import { invalidateUserCache } from "../middleware/auth";
 import {
   UnauthorizedError,
   ValidationError,
@@ -119,10 +121,8 @@ export const logout = async (
       throw new UnauthorizedError("User not found");
     }
 
-    // Update online status
-    user.isOnline = false;
-    user.lastSeen = new Date();
-    await (user as any).save();
+    await User.findByIdAndUpdate(user.id, { isOnline: false, lastSeen: new Date() });
+    await invalidateUserCache(String(user.id));
 
     res.json({
       success: true,

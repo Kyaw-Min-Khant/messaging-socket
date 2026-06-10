@@ -90,13 +90,17 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
-// Authentication types
-export interface AuthRequest extends Request {
-  query: any;
-  body: any;
-  params: any;
-  user?: IUser;
+// Extend Express Request globally so req.user is available on all routes
+declare global {
+  namespace Express {
+    interface Request {
+      user?: IUser;
+    }
+  }
 }
+
+// Backward-compatible alias — controllers that import AuthRequest still compile
+export type AuthRequest = import("express").Request;
 
 export interface JwtPayload {
   userId: string;

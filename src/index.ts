@@ -9,6 +9,20 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET is not set. Exiting.");
+  process.exit(1);
+}
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+  process.exit(1);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  process.exit(1);
+});
+
 const server = createServer(app);
 const io = new Server(server, {
   cors: {

@@ -1,8 +1,22 @@
 import { createClient } from "redis";
+import dotenv from "dotenv";
 
-const redisPort =process.env.NODE_ENV === "development" ? process.env.DEV_REDIS_PORT : process.env.REDIS_PORT;
-const redisUrl =process.env.NODE_ENV === "development" ? process.env.DEV_REDIS_URL : process.env.REDIS_URL;
-const redisPassword =process.env.NODE_ENV === "development" ? process.env.DEV_REDIS_PASSWORD : process.env.REDIS_PASSWORD;
+dotenv.config();
+
+const redisPort =
+  process.env.NODE_ENV === "development"
+    ? process.env.DEV_REDIS_PORT
+    : process.env.REDIS_PORT;
+console.log("Redis Port:", redisPort);
+const redisUrl =
+  process.env.NODE_ENV === "development"
+    ? process.env.DEV_REDIS_URL
+    : process.env.REDIS_URL;
+const redisPassword =
+  process.env.NODE_ENV === "development"
+    ? process.env.DEV_REDIS_PASSWORD
+    : process.env.REDIS_PASSWORD;
+
 export const redisClient = createClient({
   username: "default",
   password: redisPassword,
