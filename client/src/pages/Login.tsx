@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export function Login() {
-  const { setAuth } = useAuth();
+  const { setUser } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,8 +15,8 @@ export function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { user, token } = await login(email, password);
-      setAuth(user, token);
+      const user = await login(email, password);
+      setUser(user);
       navigate('/');
     } catch (err: unknown) {
       const msg =

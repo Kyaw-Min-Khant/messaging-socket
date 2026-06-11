@@ -10,7 +10,13 @@ import { JwtPayload } from "../types";
 export function registerSocketHandlers(io: Server) {
   // Validate JWT before accepting the connection — client must send token in handshake.auth
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token as string | undefined;
+    // Cookie takes priority; fall back to handshake.auth.token for non-browser clients
+    let token: string | undefined = socket.handshake.auth?.token;
+    const cookieHeader = socket.handshake.headers.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
     if (!token) return next(new Error("Authentication required"));
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;

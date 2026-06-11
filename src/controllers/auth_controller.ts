@@ -58,12 +58,16 @@ export const login = async (
       password,
       fcmtoken,
     });
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 15 * 24 * 60 * 60 * 1000,
+    });
     res.json({
       success: true,
-      data: {
-        user,
-        token,
-      },
+      data: { user },
       message: "Login successful",
     });
   } catch (error) {
@@ -124,6 +128,7 @@ export const logout = async (
     await User.findByIdAndUpdate(user.id, { isOnline: false, lastSeen: new Date() });
     await invalidateUserCache(String(user.id));
 
+    res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
     res.json({
       success: true,
       message: "Logout successful",

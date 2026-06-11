@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import type { Friend, FriendRequest } from '../types';
 import { getFriends, getFriendRequests, getAvailableUsers } from '../api/users';
@@ -17,6 +18,7 @@ type Tab = 'chats' | 'requests' | 'add';
 
 export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
   const { user, clearAuth } = useAuth();
+  const navigate = useNavigate();
   const { onlineUsers } = useSocket();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -79,7 +81,10 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
       </div>
 
       {/* Current user */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0">
+      <button
+        onClick={() => navigate('/profile')}
+        className="flex items-center gap-3 px-4 py-3 shrink-0 hover:bg-gray-800 transition-colors text-left w-full"
+      >
         <div className="relative">
           <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-semibold text-sm shrink-0 overflow-hidden">
             {user?.avatar ? (
@@ -94,7 +99,7 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
           <p className="text-sm font-medium text-white truncate">{user?.username}</p>
           <p className="text-xs text-green-400">Online</p>
         </div>
-      </div>
+      </button>
 
       {/* Search */}
       <div className="px-3 pb-2 shrink-0">

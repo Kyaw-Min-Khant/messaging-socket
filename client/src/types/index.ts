@@ -5,6 +5,7 @@ export interface AuthUser {
   avatar?: string;
   isOnline: boolean;
   lastSeen: string;
+  createdAt?: string;
 }
 
 export interface Friend {
@@ -53,9 +54,4 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   error?: string;
-}
-
-export interface LoginResponse {
-  user: AuthUser;
-  token: string;
 }

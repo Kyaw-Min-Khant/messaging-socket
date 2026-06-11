@@ -42,16 +42,19 @@ export async function invalidateUserCache(userId: string) {
 
 export const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    const cookieToken = (req as Request & { cookies?: Record<string, string> })
+      .cookies?.token;
+
+    if (!cookieToken) {
       return res.status(401).json({
         success: false,
         error: "Access denied. No token provided.",
       });
     }
-
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+    const decoded = jwt.verify(
+      cookieToken,
+      process.env.JWT_SECRET!,
+    ) as JwtPayload;
     const user = await getCachedUser(decoded.userId);
 
     if (!user) {
@@ -69,34 +72,6 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
     }
     if (error instanceof jwt.JsonWebTokenError) {
       return res.status(401).json({ success: false, error: "Invalid token." });
-    }
-    return next(error);
-  }
-};
-
-export const optionalAuth = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) return next();
-
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return next();
-
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, secret) as JwtPayload;
-    const user = await getCachedUser(decoded.userId);
-    if (user) req.user = user;
-    return next();
-  } catch (error) {
-    if (
-      error instanceof jwt.JsonWebTokenError ||
-      error instanceof jwt.TokenExpiredError
-    ) {
-      return next();
     }
     return next(error);
   }

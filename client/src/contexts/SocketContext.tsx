@@ -17,29 +17,28 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue | null>(null);
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Map<string, boolean>>(new Map());
 
   useEffect(() => {
-    if (!token) return;
+    if (!user) return;
 
+    // Cookie is sent automatically — no need to pass token manually
     const s = io('/', {
-      auth: { token },
+      withCredentials: true,
       transports: ['websocket'],
     });
 
     s.on('connect', () => setConnected(true));
     s.on('disconnect', () => setConnected(false));
-
-    s.on('userOnline', ({ id }: { id: string }) => {
-      setOnlineUsers((prev) => new Map(prev).set(id, true));
-    });
-
-    s.on('userOffline', ({ id }: { id: string }) => {
-      setOnlineUsers((prev) => new Map(prev).set(id, false));
-    });
+    s.on('userOnline', ({ id }: { id: string }) =>
+      setOnlineUsers((prev) => new Map(prev).set(id, true))
+    );
+    s.on('userOffline', ({ id }: { id: string }) =>
+      setOnlineUsers((prev) => new Map(prev).set(id, false))
+    );
 
     setSocket(s);
 
@@ -48,7 +47,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setSocket(null);
       setConnected(false);
     };
-  }, [token]);
+  }, [user]);
 
   return (
     <SocketContext.Provider value={{ socket, onlineUsers, connected }}>

@@ -6,6 +6,7 @@ import { SocketProvider } from './contexts/SocketContext';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Chat } from './pages/Chat';
+import { Profile } from './pages/Profile';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -51,6 +52,14 @@ function AppRoutes() {
             <SocketProvider>
               <Chat />
             </SocketProvider>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />
