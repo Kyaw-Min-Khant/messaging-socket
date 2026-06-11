@@ -32,7 +32,6 @@ export async function register(
 }
 
 export async function getCurrentUser(): Promise<AuthUser> {
-  console.log("Fetching current user...");
   const { data } =
     await apiClient.get<ApiResponse<{ user: AuthUser }>>("/auth/user");
   if (!data.success || !data.data)

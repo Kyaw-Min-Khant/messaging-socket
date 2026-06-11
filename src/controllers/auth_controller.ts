@@ -15,6 +15,7 @@ export const register = async (
 ): Promise<void> => {
   try {
     const { username, email, password }: RegisterRequest = req.body;
+
     if (!username || !email || !password) {
       throw new ValidationError("All fields are required");
     }
@@ -36,6 +37,7 @@ export const register = async (
       message: "User registered successfully",
     });
   } catch (error) {
+    console.log(error);
     next(error);
   }
 };
