@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import type { Friend } from '../types';
-import { addFriend } from '../api/users';
-import toast from 'react-hot-toast';
+import { useState } from "react";
+import type { Friend } from "../types";
+import { addFriend } from "../api/users";
+import toast from "react-hot-toast";
 
 interface Props {
   users: Friend[];
@@ -17,11 +17,10 @@ export function AddUsers({ users, onAdded }: Props) {
     try {
       await addFriend(userId);
       setSent((prev) => new Set(prev).add(userId));
-      toast.success('Friend request sent!');
+      toast.success("Friend request sent!");
       onAdded();
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to send request';
+      const msg = err instanceof Error ? err.message : "Failed to send request";
       toast.error(msg);
     } finally {
       setSending(null);
@@ -45,15 +44,21 @@ export function AddUsers({ users, onAdded }: Props) {
         >
           <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center text-white font-semibold text-sm shrink-0 overflow-hidden">
             {u.avatar ? (
-              <img src={u.avatar} alt={u.username} className="w-full h-full object-cover" />
+              <img
+                src={u.avatar}
+                alt={u.username}
+                className="w-full h-full object-cover"
+              />
             ) : (
               u.username[0].toUpperCase()
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{u.username}</p>
+            <p className="text-sm font-medium text-white truncate">
+              {u.username}
+            </p>
             <p className="text-xs text-gray-400">
-              {u.isOnline ? 'Online' : 'Offline'}
+              {u.isOnline ? "Online" : "Offline"}
             </p>
           </div>
           <button
@@ -66,7 +71,7 @@ export function AddUsers({ users, onAdded }: Props) {
             ) : sending === u.id ? (
               <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin inline-block" />
             ) : (
-              'Add'
+              "Add"
             )}
           </button>
         </div>

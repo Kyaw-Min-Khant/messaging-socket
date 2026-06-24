@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import type { Friend } from '../types';
-import { Sidebar } from '../components/Sidebar';
-import { ChatWindow } from '../components/ChatWindow';
+import { useState } from "react";
+import type { Friend } from "../types";
+import { Sidebar } from "../components/Sidebar";
+import { ChatWindow } from "../components/ChatWindow";
 
 export function Chat() {
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);

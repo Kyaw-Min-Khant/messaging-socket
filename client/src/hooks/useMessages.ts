@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Socket } from 'socket.io-client';
-import type { Message } from '../types';
-import { getMessages } from '../api/messages';
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Socket } from "socket.io-client";
+import type { Message } from "../types";
+import { getMessages } from "../api/messages";
 
 export function useMessages(
   friendId: string | null,
   socket: Socket | null,
-  currentUserId: string
+  currentUserId: string,
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +35,7 @@ export function useMessages(
       if (!involves) return;
       setMessages((prev) => [...prev, msg]);
       if (msg.senderId === friendId) {
-        socket.emit('markAsRead', { messageId: msg._id, senderId: friendId });
+        socket.emit("markAsRead", { messageId: msg._id, senderId: friendId });
       }
     };
 
@@ -58,42 +58,42 @@ export function useMessages(
     const onMessageRead = (data: { messageId: string }) => {
       setMessages((prev) =>
         prev.map((m) =>
-          m._id === data.messageId ? { ...m, status: 'seen' as const } : m
-        )
+          m._id === data.messageId ? { ...m, status: "seen" as const } : m,
+        ),
       );
     };
 
-    socket.on('newDirectMessage', onNewMessage);
-    socket.on('messageSent', onMessageSent);
-    socket.on('userTyping', onTyping);
-    socket.on('messageRead', onMessageRead);
+    socket.on("newDirectMessage", onNewMessage);
+    socket.on("messageSent", onMessageSent);
+    socket.on("userTyping", onTyping);
+    socket.on("messageRead", onMessageRead);
 
     return () => {
-      socket.off('newDirectMessage', onNewMessage);
-      socket.off('messageSent', onMessageSent);
-      socket.off('userTyping', onTyping);
-      socket.off('messageRead', onMessageRead);
+      socket.off("newDirectMessage", onNewMessage);
+      socket.off("messageSent", onMessageSent);
+      socket.off("userTyping", onTyping);
+      socket.off("messageRead", onMessageRead);
     };
   }, [socket, friendId, currentUserId]);
 
   const sendMessage = useCallback(
     (content: string) => {
       if (!socket || !friendId || !content.trim()) return;
-      socket.emit('sendDirectMessage', {
+      socket.emit("sendDirectMessage", {
         recipientId: friendId,
         message: content.trim(),
-        messageType: 'text',
+        messageType: "text",
       });
     },
-    [socket, friendId]
+    [socket, friendId],
   );
 
   const sendTyping = useCallback(
     (isTyping: boolean) => {
       if (!socket || !friendId) return;
-      socket.emit('typing', { recipientId: friendId, isTyping });
+      socket.emit("typing", { recipientId: friendId, isTyping });
     },
-    [socket, friendId]
+    [socket, friendId],
   );
 
   return { messages, isLoading, typingUser, sendMessage, sendTyping };

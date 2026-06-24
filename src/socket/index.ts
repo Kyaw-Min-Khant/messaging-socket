@@ -107,13 +107,22 @@ export function registerSocketHandlers(io: Server) {
 
           socket.emit("messageSent", messagePayload);
 
-          const recipient = await User.findById(data.recipientId).select("fcmtoken").lean();
-          if (recipient?.fcmtoken) {
-            const notificationMsg =
-              data.messageType === "audio" ? "Sent an audio"
-              : data.messageType === "image" ? "Sent an image"
-              : data.message;
-            await fcm_service.sendNotificationById(recipient.fcmtoken, username, notificationMsg);
+          // Only push if recipient has no active socket (they are offline/background)
+          if (!recipientSocketId) {
+            const recipient = await User.findById(data.recipientId).select("fcmtoken").lean();
+            if (recipient?.fcmtoken) {
+              const body =
+                data.messageType === "audio" ? "Sent an audio message"
+                : data.messageType === "image" ? "Sent an image"
+                : data.message;
+              fcm_service.sendMessageNotification(recipient.fcmtoken, {
+                senderUsername: username,
+                body,
+                senderId: userId,
+                conversationId: String(conversation._id),
+                messageType: data.messageType || "text",
+              });
+            }
           }
         } catch (error) {
           console.error("❌ sendDirectMessage error:", error);

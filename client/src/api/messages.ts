@@ -1,11 +1,14 @@
-import apiClient from './client';
-import type { DbMessage, Message } from '../types';
+import apiClient from "./client";
+import type { DbMessage, Message } from "../types";
 
-function normalize(msg: DbMessage, currentUserId: string, friendId: string): Message {
-  const senderId =
-    typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+function normalize(
+  msg: DbMessage,
+  currentUserId: string,
+  friendId: string,
+): Message {
+  const senderId = typeof msg.sender === "object" ? msg.sender._id : msg.sender;
   const senderUsername =
-    typeof msg.sender === 'object' ? msg.sender.username : '';
+    typeof msg.sender === "object" ? msg.sender.username : "";
   return {
     _id: msg._id,
     conversationId: msg.conversation,
@@ -22,10 +25,10 @@ function normalize(msg: DbMessage, currentUserId: string, friendId: string): Mes
 export async function getMessages(
   friendId: string,
   currentUserId: string,
-  page = 1
+  page = 1,
 ): Promise<Message[]> {
   const { data } = await apiClient.get(
-    `/conversations/${friendId}/messages?page=${page}`
+    `/conversations/${friendId}/messages?page=${page}`,
   );
   const raw: DbMessage[] = data.data ?? [];
   return raw.map((m) => normalize(m, currentUserId, friendId)).reverse();

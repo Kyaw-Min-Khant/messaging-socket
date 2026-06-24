@@ -112,6 +112,29 @@ export const getUser = async (
   }
 };
 
+// @desc    Update FCM token (called by Flutter when Firebase refreshes the token)
+// @route   PUT /api/auth/fcmtoken
+// @access  Private
+export const updateFcmToken = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    if (!req.user) throw new UnauthorizedError("User not found");
+    const { fcmtoken } = req.body;
+    if (!fcmtoken || typeof fcmtoken !== "string") {
+      res.status(400).json({ success: false, error: "fcmtoken is required" });
+      return;
+    }
+    await User.findByIdAndUpdate(req.user.id, { fcmtoken });
+    await invalidateUserCache(String(req.user.id));
+    res.json({ success: true, message: "FCM token updated" });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Logout user
 // @route   POST /api/auth/logout
 // @access  Private

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { formatDistanceToNow } from 'date-fns';
-import type { Friend } from '../types';
-import { useAuth } from '../contexts/AuthContext';
-import { useSocket } from '../contexts/SocketContext';
-import { useMessages } from '../hooks/useMessages';
-import { MessageBubble } from './MessageBubble';
+import { useEffect, useRef, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
+import type { Friend } from "../types";
+import { useAuth } from "../contexts/AuthContext";
+import { useSocket } from "../contexts/SocketContext";
+import { useMessages } from "../hooks/useMessages";
+import { MessageBubble } from "./MessageBubble";
 
 interface Props {
   friend: Friend;
@@ -16,26 +17,55 @@ export function ChatWindow({ friend }: Props) {
   const { messages, isLoading, typingUser, sendMessage, sendTyping } =
     useMessages(friend.id, socket, user!.id);
 
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const isOnline = onlineUsers.get(friend.id) ?? friend.isOnline;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUser]);
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, [friend.id]);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    if (showEmojiPicker) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showEmojiPicker]);
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart ?? input.length;
+      const end = textarea.selectionEnd ?? input.length;
+      const next = input.slice(0, start) + emojiData.emoji + input.slice(end);
+      setInput(next);
+      setTimeout(() => {
+        const pos = start + emojiData.emoji.length;
+        textarea.setSelectionRange(pos, pos);
+        textarea.focus();
+      }, 0);
+    } else {
+      setInput((prev) => prev + emojiData.emoji);
+    }
+  };
+
   const handleSend = () => {
     const trimmed = input.trim();
     if (!trimmed) return;
     sendMessage(trimmed);
-    setInput('');
+    setInput("");
     sendTyping(false);
     clearTimeout(typingTimerRef.current);
   };
@@ -48,7 +78,7 @@ export function ChatWindow({ friend }: Props) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -80,7 +110,7 @@ export function ChatWindow({ friend }: Props) {
           <p className="text-sm font-semibold text-white">{friend.username}</p>
           <p className="text-xs text-gray-400">
             {isOnline
-              ? 'Online'
+              ? "Online"
               : `Last seen ${formatDistanceToNow(new Date(friend.lastSeen), { addSuffix: true })}`}
           </p>
         </div>
@@ -123,7 +153,33 @@ export function ChatWindow({ friend }: Props) {
 
       {/* Input */}
       <div className="px-4 py-3 bg-gray-800 border-t border-gray-700/60 shrink-0">
-        <div className="flex items-end gap-2">
+        <div className="relative flex items-end gap-2">
+          {/* Emoji picker popup */}
+          {showEmojiPicker && (
+            <div
+              ref={emojiPickerRef}
+              className="absolute bottom-12 left-0 z-50"
+            >
+              <EmojiPicker
+                theme={Theme.DARK}
+                onEmojiClick={handleEmojiClick}
+                lazyLoadEmojis
+              />
+            </div>
+          )}
+
+          {/* Emoji toggle button */}
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker((v) => !v)}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-yellow-400 transition-colors shrink-0"
+            title="Emoji"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5c-.83 0-1.5-.67-1.5-1.5S9.17 13.5 10 13.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM12 9c-1.66 0-3 .9-3.58 2.22-.12.27.09.78.41.78h6.34c.32 0 .53-.51.41-.78C15 9.9 13.66 9 12 9z"/>
+            </svg>
+          </button>
+
           <textarea
             ref={textareaRef}
             value={input}
@@ -132,7 +188,7 @@ export function ChatWindow({ friend }: Props) {
             placeholder={`Message ${friend.username}...`}
             rows={1}
             className="flex-1 bg-gray-700 text-white placeholder-gray-500 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
-            style={{ minHeight: '42px', maxHeight: '120px' }}
+            style={{ minHeight: "42px", maxHeight: "120px" }}
           />
           <button
             onClick={handleSend}

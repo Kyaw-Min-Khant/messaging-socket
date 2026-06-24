@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import type { FriendRequest } from '../types';
-import { confirmFriendRequest } from '../api/users';
-import toast from 'react-hot-toast';
+import { useState } from "react";
+import type { FriendRequest } from "../types";
+import { confirmFriendRequest } from "../api/users";
+import toast from "react-hot-toast";
 
 interface Props {
   requests: FriendRequest[];
@@ -15,10 +15,10 @@ export function FriendRequests({ requests, onAccepted }: Props) {
     setAccepting(requestId);
     try {
       await confirmFriendRequest(requestId);
-      toast.success('Friend request accepted!');
+      toast.success("Friend request accepted!");
       onAccepted();
     } catch {
-      toast.error('Failed to accept request');
+      toast.error("Failed to accept request");
     } finally {
       setAccepting(null);
     }
@@ -71,7 +71,7 @@ export function FriendRequests({ requests, onAccepted }: Props) {
             {accepting === req._id ? (
               <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin inline-block" />
             ) : (
-              'Accept'
+              "Accept"
             )}
           </button>
         </div>

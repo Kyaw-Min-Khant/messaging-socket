@@ -1,20 +1,20 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
-import type { Friend, FriendRequest } from '../types';
-import { getFriends, getFriendRequests, getAvailableUsers } from '../api/users';
-import { logout } from '../api/auth';
-import { useAuth } from '../contexts/AuthContext';
-import { useSocket } from '../contexts/SocketContext';
-import { FriendRequests } from './FriendRequests';
-import { AddUsers } from './AddUsers';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
+import type { Friend, FriendRequest } from "../types";
+import { getFriends, getFriendRequests, getAvailableUsers } from "../api/users";
+import { logout } from "../api/auth";
+import { useAuth } from "../contexts/AuthContext";
+import { useSocket } from "../contexts/SocketContext";
+import { FriendRequests } from "./FriendRequests";
+import { AddUsers } from "./AddUsers";
 
 interface Props {
   selectedFriend: Friend | null;
   onSelectFriend: (friend: Friend) => void;
 }
 
-type Tab = 'chats' | 'requests' | 'add';
+type Tab = "chats" | "requests" | "add";
 
 export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
   const { user, clearAuth } = useAuth();
@@ -23,8 +23,8 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [availableUsers, setAvailableUsers] = useState<Friend[]>([]);
-  const [tab, setTab] = useState<Tab>('chats');
-  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<Tab>("chats");
+  const [search, setSearch] = useState("");
 
   const loadData = async () => {
     try {
@@ -54,7 +54,7 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
   };
 
   const filtered = friends.filter((f) =>
-    f.username.toLowerCase().includes(search.toLowerCase())
+    f.username.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -63,7 +63,11 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
       <div className="flex items-center justify-between px-4 py-3.5 shrink-0 border-b border-gray-800">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              className="w-4 h-4 text-white"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
             </svg>
           </div>
@@ -82,13 +86,17 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
 
       {/* Current user */}
       <button
-        onClick={() => navigate('/profile')}
+        onClick={() => navigate("/profile")}
         className="flex items-center gap-3 px-4 py-3 shrink-0 hover:bg-gray-800 transition-colors text-left w-full"
       >
         <div className="relative">
           <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-semibold text-sm shrink-0 overflow-hidden">
             {user?.avatar ? (
-              <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+              <img
+                src={user.avatar}
+                alt={user.username}
+                className="w-full h-full object-cover"
+              />
             ) : (
               user?.username?.[0]?.toUpperCase()
             )}
@@ -96,7 +104,9 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
           <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border-2 border-gray-900" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white truncate">{user?.username}</p>
+          <p className="text-sm font-medium text-white truncate">
+            {user?.username}
+          </p>
           <p className="text-xs text-green-400">Online</p>
         </div>
       </button>
@@ -126,29 +136,29 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
 
       {/* Tabs */}
       <div className="flex px-3 gap-1 shrink-0 pb-2">
-        {(['chats', 'requests', 'add'] as Tab[]).map((t) => (
+        {(["chats", "requests", "add"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors ${
               tab === t
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                ? "bg-indigo-600 text-white"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
             }`}
           >
-            {t === 'requests' && requests.length > 0 ? (
+            {t === "requests" && requests.length > 0 ? (
               <span className="flex items-center justify-center gap-1">
                 Requests
                 <span className="w-4 h-4 bg-red-500 text-[9px] rounded-full flex items-center justify-center text-white font-bold">
                   {requests.length}
                 </span>
               </span>
-            ) : t === 'chats' ? (
-              'Chats'
-            ) : t === 'requests' ? (
-              'Requests'
+            ) : t === "chats" ? (
+              "Chats"
+            ) : t === "requests" ? (
+              "Requests"
             ) : (
-              'Add'
+              "Add"
             )}
           </button>
         ))}
@@ -156,16 +166,20 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'chats' && (
+        {tab === "chats" && (
           <div className="space-y-0.5 px-2 pb-2">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-14 text-gray-500">
-                <svg className="w-10 h-10 mb-3 opacity-30" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  className="w-10 h-10 mb-3 opacity-30"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
                 </svg>
                 <p className="text-sm">No friends yet</p>
                 <button
-                  onClick={() => setTab('add')}
+                  onClick={() => setTab("add")}
                   className="mt-1.5 text-xs text-indigo-400 hover:text-indigo-300"
                 >
                   Find people to chat with
@@ -180,15 +194,17 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
                     key={friend.id}
                     onClick={() => onSelectFriend(friend)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${
-                      isSelected
-                        ? 'bg-indigo-600'
-                        : 'hover:bg-gray-800'
+                      isSelected ? "bg-indigo-600" : "hover:bg-gray-800"
                     }`}
                   >
                     <div className="relative shrink-0">
                       <div className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center text-white font-semibold text-sm overflow-hidden">
                         {friend.avatar ? (
-                          <img src={friend.avatar} alt={friend.username} className="w-full h-full object-cover" />
+                          <img
+                            src={friend.avatar}
+                            alt={friend.username}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           friend.username[0].toUpperCase()
                         )}
@@ -196,7 +212,7 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
                       {isOnline && (
                         <span
                           className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 bg-green-400 ${
-                            isSelected ? 'border-indigo-600' : 'border-gray-900'
+                            isSelected ? "border-indigo-600" : "border-gray-900"
                           }`}
                         />
                       )}
@@ -204,18 +220,18 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
                     <div className="flex-1 min-w-0">
                       <p
                         className={`text-sm font-medium truncate ${
-                          isSelected ? 'text-white' : 'text-gray-200'
+                          isSelected ? "text-white" : "text-gray-200"
                         }`}
                       >
                         {friend.username}
                       </p>
                       <p
                         className={`text-xs truncate ${
-                          isSelected ? 'text-indigo-200' : 'text-gray-500'
+                          isSelected ? "text-indigo-200" : "text-gray-500"
                         }`}
                       >
                         {isOnline
-                          ? 'Online'
+                          ? "Online"
                           : `${formatDistanceToNow(new Date(friend.lastSeen), { addSuffix: true })}`}
                       </p>
                     </div>
@@ -226,11 +242,11 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
           </div>
         )}
 
-        {tab === 'requests' && (
+        {tab === "requests" && (
           <FriendRequests requests={requests} onAccepted={loadData} />
         )}
 
-        {tab === 'add' && (
+        {tab === "add" && (
           <AddUsers users={availableUsers} onAdded={loadData} />
         )}
       </div>
