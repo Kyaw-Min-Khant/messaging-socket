@@ -15,6 +15,7 @@ import {
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import { errorHandler } from "./middleware/error_middleware";
+import { getAllowedOrigins, isOriginAllowed } from "./config/cors";
 dotenv.config();
 
 const app = express();
@@ -56,15 +57,17 @@ const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Middleware
-const allowedOrigins = (
-  process.env.CLIENT_URL || "http://localhost:3000"
-).split(",");
+const allowedOrigins = getAllowedOrigins();
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-      else callback(new Error("Not allowed by CORS"));
+      if (isOriginAllowed(origin, allowedOrigins)) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS blocked origin: ${origin}`);
+        callback(null, false);
+      }
     },
     credentials: true,
   }),
