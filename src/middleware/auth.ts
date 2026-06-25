@@ -1,74 +1,78 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
-import { AuthRequest, JwtPayload } from "../types";
+import { JwtPayload } from "../types";
+import { redisClient } from "../config/redis";
 
-export const auth = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
+const USER_CACHE_TTL = 60; // seconds
+
+async function getCachedUser(userId: string) {
+  const cacheKey = `user:${userId}`;
   try {
-    const token = (req.headers as any).authorization?.replace("Bearer ", "");
-    if (!token) {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch {
+    // Redis unavailable — fall through to DB
+  }
+
+  const user = await User.findById(userId).select("-password").lean();
+  if (user) {
+    const userWithId = { ...user, id: user._id.toString() };
+    try {
+      await redisClient.setEx(
+        cacheKey,
+        USER_CACHE_TTL,
+        JSON.stringify(userWithId),
+      );
+    } catch {
+      // Redis write failed — continue without caching
+    }
+    return userWithId;
+  }
+  return null;
+}
+
+export async function invalidateUserCache(userId: string) {
+  try {
+    await redisClient.del(`user:${userId}`);
+  } catch {
+    // Best-effort cache invalidation
+  }
+}
+
+export const auth = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const cookieToken = (req as Request & { cookies?: Record<string, string> })
+      .cookies?.token;
+
+    if (!cookieToken) {
       return res.status(401).json({
         success: false,
         error: "Access denied. No token provided.",
       });
     }
-
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
-
-    const decoded = jwt.verify(token, secret) as JwtPayload;
-    const user = await User.findById(decoded.userId).select("-password");
+    const decoded = jwt.verify(
+      cookieToken,
+      process.env.JWT_SECRET!,
+    ) as JwtPayload;
+    const user = await getCachedUser(decoded.userId);
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: "Invalid token. User not found.",
+        error: "User not found.",
       });
     }
 
     req.user = user;
-
     return next();
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      error: "Invalid token.",
-    });
-  }
-};
-
-export const optionalAuth = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const token = (req.headers as any).authorization?.replace("Bearer ", "");
-
-    if (!token) {
-      return next();
+    if (error instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ success: false, error: "Token expired." });
     }
-
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      return next();
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ success: false, error: "Invalid token." });
     }
-
-    const decoded = jwt.verify(token, secret) as JwtPayload;
-    const user = await User.findById(decoded.userId).select("-password");
-
-    if (user) {
-      req.user = user;
-    }
-
-    next();
-  } catch (error) {
-    next();
+    return next(error);
   }
 };

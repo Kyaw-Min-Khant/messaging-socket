@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { AuthRequest, RegisterRequest, LoginRequest } from "../types";
 import auth_service from "../services/auth_service";
+import User from "../models/User";
+import { invalidateUserCache } from "../middleware/auth";
 import {
   UnauthorizedError,
   ValidationError,
@@ -13,6 +15,7 @@ export const register = async (
 ): Promise<void> => {
   try {
     const { username, email, password }: RegisterRequest = req.body;
+
     if (!username || !email || !password) {
       throw new ValidationError("All fields are required");
     }
@@ -34,6 +37,7 @@ export const register = async (
       message: "User registered successfully",
     });
   } catch (error) {
+    console.log(error);
     next(error);
   }
 };
@@ -56,12 +60,16 @@ export const login = async (
       password,
       fcmtoken,
     });
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 15 * 24 * 60 * 60 * 1000,
+    });
     res.json({
       success: true,
-      data: {
-        user,
-        token,
-      },
+      data: { user },
       message: "Login successful",
     });
   } catch (error) {
@@ -104,6 +112,29 @@ export const getUser = async (
   }
 };
 
+// @desc    Update FCM token (called by Flutter when Firebase refreshes the token)
+// @route   PUT /api/auth/fcmtoken
+// @access  Private
+export const updateFcmToken = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    if (!req.user) throw new UnauthorizedError("User not found");
+    const { fcmtoken } = req.body;
+    if (!fcmtoken || typeof fcmtoken !== "string") {
+      res.status(400).json({ success: false, error: "fcmtoken is required" });
+      return;
+    }
+    await User.findByIdAndUpdate(req.user.id, { fcmtoken });
+    await invalidateUserCache(String(req.user.id));
+    res.json({ success: true, message: "FCM token updated" });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Logout user
 // @route   POST /api/auth/logout
 // @access  Private
@@ -119,11 +150,10 @@ export const logout = async (
       throw new UnauthorizedError("User not found");
     }
 
-    // Update online status
-    user.isOnline = false;
-    user.lastSeen = new Date();
-    await (user as any).save();
+    await User.findByIdAndUpdate(user.id, { isOnline: false, lastSeen: new Date() });
+    await invalidateUserCache(String(user.id));
 
+    res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
     res.json({
       success: true,
       message: "Logout successful",

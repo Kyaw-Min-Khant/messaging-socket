@@ -2,6 +2,9 @@ import { AuthRequest } from "./../types/index";
 import { NextFunction, Request, Response } from "express";
 import user_service from "../services/user_service";
 import { UnauthorizedError } from "../services/custom_error_service";
+import { invalidateUserCache } from "../middleware/auth";
+import User from "../models/User";
+import fcm_service from "../services/fcm_service";
 
 export const getUserController = async (req: Request, res: Response) => {
   //    const user=  await redisClient.hGetAll('connectedUsers')
@@ -21,8 +24,8 @@ export const getMobileUserListController = async (
     if (!req?.user?.id) {
       throw new UnauthorizedError("User not authenticated");
     }
-    const page = parseInt(req?.query?.page) || 1;
-    const limit = parseInt(req?.query?.limit) || 10;
+    const page = parseInt(req?.query?.page as string) || 1;
+    const limit = parseInt(req?.query?.limit as string) || 10;
     const skip = (page - 1) * limit;
     const userList = await user_service.getAllUserListForMobile(req?.user?.id);
     res.status(200).json({
@@ -48,6 +51,13 @@ export const addFriendController = async (
       success: true,
       message: "Friend request sent successfully",
     });
+
+    // Fire-and-forget: push notification to the recipient
+    User.findById(friend_id).select("fcmtoken").lean().then((recipient) => {
+      if (recipient?.fcmtoken && req.user?.username) {
+        fcm_service.sendFriendRequestNotification(recipient.fcmtoken, req.user.username);
+      }
+    }).catch(() => {});
   } catch (e) {
     console.log("Error in Add Friend:", e);
     next(e);
@@ -109,6 +119,28 @@ export const getFriendListController = async (
     res.status(200).json({
       data: friendsList,
     });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const updateAvatarController = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    if (!req?.user?.id) {
+      throw new UnauthorizedError("User not authenticated");
+    }
+    const { avatar } = req.body;
+    if (!avatar || typeof avatar !== "string") {
+      res.status(400).json({ success: false, error: "Avatar URL is required" });
+      return;
+    }
+    await user_service.updateAvatar(req.user.id, avatar);
+    await invalidateUserCache(String(req.user.id));
+    res.status(200).json({ success: true, message: "Avatar updated successfully", data: { avatar } });
   } catch (e) {
     next(e);
   }

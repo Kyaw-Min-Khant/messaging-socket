@@ -4,8 +4,8 @@ import Message from "../models/Message";
 
 class MessageService {
   async getMessageListByUser(
-    user_id: mongoose.Types.ObjectId,
-    friend_id: mongoose.Types.ObjectId,
+    user_id: string | mongoose.Types.ObjectId,
+    friend_id: string | mongoose.Types.ObjectId,
     page: number = 1,
     limit: number = 20,
   ) {

@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 dotenv.config();
-const MONGODB_URI = process.env.MONGODB_URI as string;
+const MONGODB_URI =
+  process.env.NODE_ENV === "development"
+    ? (process.env.DEV_MONGODB_URI as string)
+    : (process.env.MONGODB_URI as string);
 
 export const connectDB = async (): Promise<void> => {
   try {
     const conn = await mongoose.connect(MONGODB_URI);
-
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-
     // Handle connection events
     mongoose.connection.on("error", (err) => {
       console.error("❌ MongoDB connection error:", err);

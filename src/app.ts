@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import routes from "./routes";
 import {
@@ -21,13 +22,23 @@ const app = express();
 // Security middleware
 app.use(helmet());
 app.use(compression());
-// Rate limiting
+
+// Rate limiting — general API
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000,
+  max: 100,
   message: "Too many requests from this IP, please try again later.",
 });
-app.use("/api", limiter);
+app.use("/v1/api", limiter);
+
+// Stricter limiter for auth endpoints to prevent brute force
+const authLimiter = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  max: 50,
+  message: "Too many auth attempts, please try again later.",
+});
+app.use("/v1/api/auth/login", authLimiter);
+app.use("/v1/api/auth/register", authLimiter);
 
 const options = {
   definition: {
@@ -45,18 +56,23 @@ const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Middleware
+const allowedOrigins = (
+  process.env.CLIENT_URL || "http://localhost:3000"
+).split(",");
+
 app.use(
   cors({
-    origin:
-      process.env.CLIENT_URL ||
-      "http://localhost:3000" ||
-      "http://192.168.100.7:3000",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+      else callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
-  })
+  }),
 );
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // Logging middleware
 if (process.env.NODE_ENV === "development") {
@@ -89,7 +105,7 @@ app.use(
     err: Error,
     req: express.Request,
     res: express.Response,
-    next: express.NextFunction
+    _next: express.NextFunction,
   ) => {
     console.error("❌ Error:", err.stack);
     const acceptsHTML = req.accepts("html");
@@ -105,7 +121,7 @@ app.use(
             : "Something went wrong!",
       });
     }
-  }
+  },
 );
 
 // 404 handler

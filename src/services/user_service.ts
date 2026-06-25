@@ -66,6 +66,10 @@ class UserService {
     );
     return friends;
   }
+
+  async updateAvatar(user_id: mongoose.Types.ObjectId, avatar: string) {
+    await User.findByIdAndUpdate(user_id, { avatar });
+  }
 }
 
 export default new UserService();

@@ -9,6 +9,7 @@ const ProfleImages = [
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ8wR88BF7EWiIPx0AczdbsXk2sRKCUIxlItyuvBc_DNg&s",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1abgZFHSN1dft87SClXpEhanK9ijEKqoZAw&s",
 ];
+
 class AuthService {
   async register({ username, email, password }: RegisterRequest) {
     const existingUser = await User.findOne({

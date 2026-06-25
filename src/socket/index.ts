@@ -1,252 +1,187 @@
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
 import { redisClient } from "../config/redis";
 import Message from "../models/Message";
 import User from "../models/User";
 import Conversation from "../models/Conversation";
 import fcm_service from "../services/fcm_service";
+import { JwtPayload } from "../types";
 
 export function registerSocketHandlers(io: Server) {
-  {
-    io.on("connection", (socket) => {
-      console.log(`🔌 User connected: ${socket.id}`);
-      socket.on(
-        "authenticate",
-        async (data: { username: string; userId?: string }) => {
-          try {
-            const user = {
-              id: socket.id,
-              username: data.username,
-              userId: data.userId,
-              socketId: socket.id,
-              isOnline: true,
-              lastSeen: new Date().toISOString(),
-            };
+  // Validate JWT before accepting the connection — client must send token in handshake.auth
+  io.use((socket, next) => {
+    // Cookie takes priority; fall back to handshake.auth.token for non-browser clients
+    let token: string | undefined = socket.handshake.auth?.token;
+    const cookieHeader = socket.handshake.headers.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
+    if (!token) return next(new Error("Authentication required"));
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+      socket.data.userId = decoded.userId;
+      socket.data.username = decoded.username;
+      next();
+    } catch {
+      next(new Error("Invalid token"));
+    }
+  });
 
-            // Store user in Redis with their socket ID
-            await redisClient.hSet(
-              "connectedUsers",
-              socket.id,
-              JSON.stringify(user),
-            );
-            // If userId is provided, also store by userId for easy lookup
-            if (data.userId) {
-              await redisClient.hSet("userSockets", data.userId, socket.id);
-            }
-            // Update user online status in database if userId is provided
-            if (data.userId) {
-              await User.findByIdAndUpdate(data.userId, {
-                isOnline: true,
-                lastSeen: new Date(),
-              });
-            }
+  io.on("connection", async (socket) => {
+    const userId = socket.data.userId as string;
+    const username = socket.data.username as string;
 
-            // Get all online users for the client
-            // const usersObj = await redisClient.hGetAll("connectedUsers");
-            // const onlineUsers = Object.values(usersObj)
-            //   .map((str) => JSON.parse(str))
-            //   .map((u) => ({
-            //     id: u.userId || u.id,
-            //     username: u.username,
-            //     isOnline: true,
-            //     socketId: u.socketId,
-            //   }));
+    try {
+      // Auto-register using JWT-verified identity — no need to trust client-sent userId
+      const userEntry = {
+        id: socket.id,
+        username,
+        userId,
+        socketId: socket.id,
+        isOnline: true,
+        lastSeen: new Date().toISOString(),
+      };
+      await Promise.all([
+        redisClient.hSet("connectedUsers", socket.id, JSON.stringify(userEntry)),
+        redisClient.hSet("userSockets", userId, socket.id),
+        User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() }),
+      ]);
+      console.log(`🔌 ${username} connected: ${socket.id}`);
+    } catch (error) {
+      console.error("Error registering connected user:", error);
+    }
 
-            // Send online users list to the authenticated user
-            socket.emit("authenticated", {
-              user: { id: data.userId || socket.id, username: data.username },
-            });
+    // Keep authenticate event for backward compat with existing clients
+    socket.on("authenticate", () => {
+      socket.emit("authenticated", { user: { id: userId, username } });
+      socket.broadcast.emit("userOnline", { id: userId, username, isOnline: true });
+    });
 
-            // Notify all other users that this user is online
-            socket.broadcast.emit("userOnline", {
-              id: data.userId || socket.id,
-              username: data.username,
-              isOnline: true,
-            });
-
-            console.log(
-              `✅ ${data.username} authenticated (${
-                data.userId || "no userId"
-              })`,
-            );
-          } catch (error) {
-            console.error("Error in authenticate event:", error);
-            socket.emit("error", { message: "Failed to authenticate" });
-          }
-        },
-      );
-
-      socket.on(
-        "sendDirectMessage",
-        async (data: {
-          recipientId: string;
-          message: string;
-          messageType?: string;
-        }) => {
-          // console.log("sendDirectMessage event received:", data);
-          try {
-            const userStr = await redisClient.hGet("connectedUsers", socket.id);
-            const user = userStr ? JSON.parse(userStr) : null;
-
-            if (!user) {
-              socket.emit("error", { message: "User not authenticated" });
-              return;
-            }
-
-            const senderId = user.userId;
-
-            let conversation = await Conversation.findOne({
-              participants: { $all: [senderId, data.recipientId] },
-            });
-
-            if (!conversation) {
-              conversation = await Conversation.create({
-                participants: [senderId, data.recipientId],
-              });
-            }
-            const newMessage = await Message.create({
-              conversation: conversation._id,
-              sender: senderId,
-              recipient: data.recipientId,
-              content: data.message,
-              messageType: data.messageType || "text",
-              fileUrl: data.message,
-              status: "sent",
-            });
-
-            const messagePayload = {
-              _id: newMessage._id,
-              conversationId: conversation._id,
-              senderId,
-              senderUsername: user.username,
-              recipientId: data.recipientId,
-              message: data.message,
-              messageType: newMessage.messageType,
-              timestamp: newMessage.createdAt,
-              status: "sent",
-            };
-            const recipientSocketId = await redisClient.hGet(
-              "userSockets",
-              data.recipientId,
-            );
-
-            if (recipientSocketId) {
-              io.to(recipientSocketId).emit("newDirectMessage", {
-                ...messagePayload,
-                status: "delivered",
-              });
-
-              await Message.findByIdAndUpdate(newMessage._id, {
-                status: "delivered",
-              });
-            }
-
-            socket.emit("messageSent", messagePayload);
-            let userData = await User.findById(data.recipientId);
-            if (userData && userData.fcmtoken) {
-              const notificationMsg =
-                data.messageType === "audio"
-                  ? "Sent an audio"
-                  : data.messageType === "image"
-                    ? "Sent an image"
-                    : data.message;
-              const fcmResponse = await fcm_service.sendNotificationById(
-                userData.fcmtoken,
-                user.username as string,
-                notificationMsg as string,
-              );
-            }
-            // console.log(
-            //   `💬 ${user.username} → ${data.recipientId}: ${data.message}`,
-            // );
-          } catch (error) {
-            console.error("❌ sendDirectMessage error:", error);
-            socket.emit("error", { message: "Failed to send message" });
-          }
-        },
-      );
-
-      // Handle typing indicator for direct messages
-      socket.on(
-        "typing",
-        async (data: { recipientId: string; isTyping: boolean }) => {
-          const userStr = await redisClient.hGet("connectedUsers", socket.id);
-          const user = userStr ? JSON.parse(userStr) : null;
-          if (!user) return;
-          const targetId = data.recipientId;
-
-          if (!targetId || typeof targetId !== "string") {
-            console.error("❌ Invalid Recipient ID received:", targetId);
-            return socket.emit("error", { message: "Invalid recipient" });
+    socket.on(
+      "sendDirectMessage",
+      async (data: { recipientId: string; message: string; messageType?: string }) => {
+        try {
+          if (!data.recipientId || typeof data.recipientId !== "string") {
+            socket.emit("error", { message: "Invalid recipient" });
+            return;
           }
 
-          const recipientSocketId = await redisClient.hGet(
-            "userSockets",
-            targetId,
-          );
-          // const recipientSocketId = await redisClient.hGet(
-          //   "userSockets",
-          //   data.recipientId,
-          // );
-          if (recipientSocketId) {
-            io.to(recipientSocketId).emit("userTyping", {
-              senderId: user.userId || user.id,
-              senderUsername: user.username,
-              isTyping: data.isTyping,
-            });
-          }
-        },
-      );
-
-      // Handle message read receipts
-      socket.on(
-        "markAsRead",
-        async (data: { messageId: string; senderId: string }) => {
-          const userStr = await redisClient.hGet("connectedUsers", socket.id);
-          const user = userStr ? JSON.parse(userStr) : null;
-          if (!user) return;
-
-          const senderSocketId = await redisClient.hGet(
-            "userSockets",
-            data.senderId,
-          );
-          if (senderSocketId) {
-            io.to(senderSocketId).emit("messageRead", {
-              messageId: data.messageId,
-              readBy: user.userId || user.id,
-              readAt: new Date().toISOString(),
+          let conversation = await Conversation.findOne({
+            participants: { $all: [userId, data.recipientId] },
+          });
+          if (!conversation) {
+            conversation = await Conversation.create({
+              participants: [userId, data.recipientId],
             });
           }
 
-          // TODO: Update message status in database
-        },
-      );
-      // Handle disconnection
-      socket.on("disconnect", async () => {
-        const userStr = await redisClient.hGet("connectedUsers", socket.id);
-        const user = userStr ? JSON.parse(userStr) : null;
-        if (user) {
-          if (user.userId) {
-            await User.findByIdAndUpdate(user.userId, {
-              isOnline: false,
-              lastSeen: new Date(),
-            });
-          }
-
-          await redisClient.hDel("connectedUsers", socket.id);
-          if (user.userId) {
-            await redisClient.hDel("userSockets", user.userId);
-          }
-
-          socket.broadcast.emit("userOffline", {
-            id: user.userId || user.id,
-            username: user.username,
-            isOnline: false,
-            lastSeen: new Date().toISOString(),
+          const newMessage = await Message.create({
+            conversation: conversation._id,
+            sender: userId,
+            content: data.message,
+            messageType: data.messageType || "text",
+            status: "sent",
           });
 
-          console.log(`👋 ${user.username} disconnected`);
+          const messagePayload = {
+            _id: newMessage._id,
+            conversationId: conversation._id,
+            senderId: userId,
+            senderUsername: username,
+            recipientId: data.recipientId,
+            message: data.message,
+            messageType: newMessage.messageType,
+            timestamp: newMessage.createdAt,
+            status: "sent",
+          };
+
+          const recipientSocketId = await redisClient.hGet("userSockets", data.recipientId);
+          if (recipientSocketId) {
+            io.to(recipientSocketId).emit("newDirectMessage", {
+              ...messagePayload,
+              status: "delivered",
+            });
+            await Message.findByIdAndUpdate(newMessage._id, { status: "delivered" });
+          }
+
+          socket.emit("messageSent", messagePayload);
+
+          // Only push if recipient has no active socket (they are offline/background)
+          if (!recipientSocketId) {
+            const recipient = await User.findById(data.recipientId).select("fcmtoken").lean();
+            if (recipient?.fcmtoken) {
+              const body =
+                data.messageType === "audio" ? "Sent an audio message"
+                : data.messageType === "image" ? "Sent an image"
+                : data.message;
+              fcm_service.sendMessageNotification(recipient.fcmtoken, {
+                senderUsername: username,
+                body,
+                senderId: userId,
+                conversationId: String(conversation._id),
+                messageType: data.messageType || "text",
+              });
+            }
+          }
+        } catch (error) {
+          console.error("❌ sendDirectMessage error:", error);
+          socket.emit("error", { message: "Failed to send message" });
         }
-      });
+      },
+    );
+
+    socket.on("typing", async (data: { recipientId: string; isTyping: boolean }) => {
+      if (!data.recipientId || typeof data.recipientId !== "string") {
+        socket.emit("error", { message: "Invalid recipient" });
+        return;
+      }
+      const recipientSocketId = await redisClient.hGet("userSockets", data.recipientId);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("userTyping", {
+          senderId: userId,
+          senderUsername: username,
+          isTyping: data.isTyping,
+        });
+      }
     });
-  }
+
+    socket.on("markAsRead", async (data: { messageId: string; senderId: string }) => {
+      try {
+        await Message.findByIdAndUpdate(data.messageId, {
+          status: "seen",
+          seenAt: new Date(),
+        });
+        const senderSocketId = await redisClient.hGet("userSockets", data.senderId);
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("messageRead", {
+            messageId: data.messageId,
+            readBy: userId,
+            readAt: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        console.error("❌ markAsRead error:", error);
+      }
+    });
+
+    socket.on("disconnect", async () => {
+      try {
+        await Promise.all([
+          User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() }),
+          redisClient.hDel("connectedUsers", socket.id),
+          redisClient.hDel("userSockets", userId),
+        ]);
+        socket.broadcast.emit("userOffline", {
+          id: userId,
+          username,
+          isOnline: false,
+          lastSeen: new Date().toISOString(),
+        });
+        console.log(`👋 ${username} disconnected`);
+      } catch (error) {
+        console.error("Error on disconnect cleanup:", error);
+      }
+    });
+  });
 }

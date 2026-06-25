@@ -12,10 +12,11 @@ export const getMessageListById = async (
     if (!req?.user?.id || !req?.params?.friend_id) {
       throw new UnauthorizedError("User not authenticated");
     }
+    const page = parseInt(req.query?.page as string) || 1;
     const messageList = await message_service.getMessageListByUser(
       req?.user?.id,
       req?.params?.friend_id,
-      req.query?.page,
+      page,
     );
     res.status(200).json({
       data: messageList,
