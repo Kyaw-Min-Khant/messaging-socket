@@ -27,7 +27,7 @@ class AuthService {
       username,
       email,
       password,
-      avator: randomImage,
+      avatar: randomImage,
     });
 
     await user.save();

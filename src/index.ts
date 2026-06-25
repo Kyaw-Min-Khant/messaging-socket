@@ -6,6 +6,7 @@ import initializeFirebase from "./config/firebase";
 import { connectRedis } from "./config/redis";
 import { registerSocketHandlers } from "./socket";
 import dotenv from "dotenv";
+import { getAllowedOrigins } from "./config/cors";
 
 dotenv.config();
 
@@ -26,7 +27,7 @@ process.on("uncaughtException", (err) => {
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: getAllowedOrigins(),
     methods: ["GET", "POST"],
     credentials: true,
   },

@@ -24,21 +24,26 @@ self.FIREBASE_CONFIG = {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), firebaseSwConfigPlugin()],
-  server: {
-    host: true,
-    port: 3000,
-    proxy: {
-      '/v1/api': {
-        target: 'http://localhost:1500',
-        changeOrigin: true,
-      },
-      '/socket.io': {
-        target: 'http://localhost:1500',
-        ws: true,
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:1500'
+
+  return {
+    plugins: [react(), firebaseSwConfigPlugin()],
+    server: {
+      host: true,
+      port: 3000,
+      proxy: {
+        '/v1/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+        '/socket.io': {
+          target: apiProxyTarget,
+          ws: true,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  }
 })
