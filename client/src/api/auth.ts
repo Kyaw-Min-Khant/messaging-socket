@@ -1,19 +1,13 @@
 import type { ApiResponse, AuthUser } from "../types";
 import apiClient from "./client";
-import { getWebFCMToken } from "../lib/firebase";
 
 export async function login(
   email: string,
   password: string,
 ): Promise<AuthUser> {
-  const fcmtoken = await getWebFCMToken().catch(() => "");
   const { data } = await apiClient.post<ApiResponse<{ user: AuthUser }>>(
     "/auth/login",
-    {
-      email,
-      password,
-      fcmtoken: fcmtoken ?? "",
-    },
+    { email, password },
   );
   if (!data.success || !data.data)
     throw new Error(data.message ?? "Login failed");

@@ -36,7 +36,10 @@ export function ChatWindow({ friend }: Props) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(e.target as Node)
+      ) {
         setShowEmojiPicker(false);
       }
     };
@@ -176,7 +179,7 @@ export function ChatWindow({ friend }: Props) {
             title="Emoji"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5c-.83 0-1.5-.67-1.5-1.5S9.17 13.5 10 13.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM12 9c-1.66 0-3 .9-3.58 2.22-.12.27.09.78.41.78h6.34c.32 0 .53-.51.41-.78C15 9.9 13.66 9 12 9z"/>
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5c-.83 0-1.5-.67-1.5-1.5S9.17 13.5 10 13.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM12 9c-1.66 0-3 .9-3.58 2.22-.12.27.09.78.41.78h6.34c.32 0 .53-.51.41-.78C15 9.9 13.66 9 12 9z" />
             </svg>
           </button>
 
