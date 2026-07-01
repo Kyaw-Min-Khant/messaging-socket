@@ -6,6 +6,8 @@ services:
       - APP_NAME=App1
     ports:
       - "3001:3000"
+    networks:
+      - backend
 
   app2:
     build: .
@@ -13,6 +15,8 @@ services:
       - APP_NAME=App2
     ports:
       - "3002:3000"
+    networks:
+      - backend
 
   app3:
     build: .
@@ -20,3 +24,65 @@ services:
       - APP_NAME=App3
     ports:
       - "3003:3000"
+    networks:
+      - backend
+
+  # --- New microservices world (additive — app1/2/3 above are the still-live,
+  # unmodified monolith and keep serving 100% of existing traffic until each
+  # feature's own extraction phase cuts the gateway's routing over) ---
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=expenses
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  expense-service:
+    build:
+      context: .
+      dockerfile: services/expense-service/Dockerfile
+    env_file:
+      - services/expense-service/.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/expenses?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    env_file:
+      - services/gateway/.env
+    environment:
+      - EXPENSE_SERVICE_URL=http://expense-service:3000
+      - MONOLITH_URL=http://app1:3000
+    ports:
+      - "8080:3000"
+    depends_on:
+      - expense-service
+      - app1
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:

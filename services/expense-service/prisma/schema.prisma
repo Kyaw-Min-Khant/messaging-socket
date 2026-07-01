@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExpenseCategory {
+  FOOD
+  TRANSPORT
+  HOUSING
+  UTILITIES
+  HEALTHCARE
+  ENTERTAINMENT
+  SHOPPING
+  EDUCATION
+  TRAVEL
+  SAVINGS
+  OTHER
+}
+
+model Expense {
+  id          String          @id @default(uuid())
+  userId      String          @map("user_id")
+  amount      Decimal         @db.Decimal(12, 2)
+  currency    String          @default("USD") @db.Char(3)
+  category    ExpenseCategory @default(OTHER)
+  description String?         @db.VarChar(500)
+  spentAt     DateTime        @map("spent_at") @db.Date
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId, spentAt])
+  @@index([userId, category])
+  @@map("expenses")
+}
