@@ -108,7 +108,7 @@ export async function updateExpense(
   body: UpdateExpenseBody,
 ) {
   const validated = validateUpdateExpense(body);
-  const data: Prisma.ExpenseUpdateManyMutationInput = {};
+  const data: Prisma.ExpenseUncheckedUpdateManyInput = {};
   if (validated.amount !== undefined)
     data.amount = new Prisma.Decimal(validated.amount as string);
   if (validated.currency !== undefined)
@@ -116,7 +116,7 @@ export async function updateExpense(
   if (validated.categoryId !== undefined)
     data.categoryId = validated.categoryId as string;
   if (validated.paymentMethod !== undefined)
-    data.paymentMethod = validated.paymentMethod as Prisma.ExpenseUpdateManyMutationInput["paymentMethod"];
+    data.paymentMethod = validated.paymentMethod as Prisma.ExpenseUncheckedUpdateManyInput["paymentMethod"];
   if (validated.description !== undefined)
     data.description = validated.description as string | null;
   if (validated.spentAt !== undefined)
