@@ -1,4 +1,4 @@
-import apiClient from "./client";
+import apiClient from "./expenseClient";
 import type {
   ApiResponse,
   Expense,
