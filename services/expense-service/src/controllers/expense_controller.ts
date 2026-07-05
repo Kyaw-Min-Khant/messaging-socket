@@ -115,3 +115,16 @@ export async function getSummaryController(
     next(err);
   }
 }
+
+export async function listCategoriesController(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const categories = await expenseService.listCategories();
+    res.status(200).json({ success: true, data: categories });
+  } catch (err) {
+    next(err);
+  }
+}

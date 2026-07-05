@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Expense, ExpenseCategory, Prisma } from "@prisma/client";
 import { NotFoundError } from "@app/shared-errors";
 import { prisma } from "../config/prisma";
 import {
@@ -13,20 +13,31 @@ import {
   UpdateExpenseBody,
 } from "../types";
 
+type ExpenseWithCategory = Expense & { category: ExpenseCategory };
+
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 
-export async function createExpense(userId: string, body: CreateExpenseBody) {
+export async function listCategories() {
+  return prisma.expenseCategory.findMany({ orderBy: { name: "asc" } });
+}
+
+export async function createExpense(
+  userId: string,
+  body: CreateExpenseBody,
+): Promise<ExpenseWithCategory> {
   const validated = validateCreateExpense(body);
   return prisma.expense.create({
     data: {
       userId,
       amount: new Prisma.Decimal(validated.amount),
       currency: validated.currency,
-      category: validated.category,
+      category: { connect: { id: validated.categoryId } },
+      paymentMethod: validated.paymentMethod,
       description: validated.description,
       spentAt: new Date(validated.spentAt),
     },
+    include: { category: true },
   });
 }
 
@@ -34,13 +45,17 @@ export async function listExpenses(userId: string, query: ListExpensesQuery) {
   const page = Math.max(1, parseInt(query.page ?? "1", 10) || 1);
   const limit = Math.min(
     MAX_PAGE_SIZE,
-    Math.max(1, parseInt(query.limit ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE),
+    Math.max(
+      1,
+      parseInt(query.limit ?? String(DEFAULT_PAGE_SIZE), 10) ||
+        DEFAULT_PAGE_SIZE,
+    ),
   );
-  const category = assertValidCategoryFilter(query.category);
+  const categoryName = assertValidCategoryFilter(query.category);
 
   const where: Prisma.ExpenseWhereInput = {
     userId,
-    ...(category ? { category } : {}),
+    ...(categoryName ? { category: { name: categoryName } } : {}),
     ...(query.startDate || query.endDate
       ? {
           spentAt: {
@@ -54,6 +69,7 @@ export async function listExpenses(userId: string, query: ListExpensesQuery) {
   const [items, total] = await Promise.all([
     prisma.expense.findMany({
       where,
+      include: { category: true },
       orderBy: { spentAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -72,8 +88,14 @@ export async function listExpenses(userId: string, query: ListExpensesQuery) {
   };
 }
 
-export async function getExpenseById(userId: string, id: string) {
-  const expense = await prisma.expense.findFirst({ where: { id, userId } });
+export async function getExpenseById(
+  userId: string,
+  id: string,
+): Promise<ExpenseWithCategory> {
+  const expense = await prisma.expense.findFirst({
+    where: { id, userId },
+    include: { category: true },
+  });
   if (!expense) {
     throw new NotFoundError("Expense not found.");
   }
@@ -86,13 +108,19 @@ export async function updateExpense(
   body: UpdateExpenseBody,
 ) {
   const validated = validateUpdateExpense(body);
-  const data: Prisma.ExpenseUpdateManyMutationInput = { ...validated };
-  if (validated.amount !== undefined) {
+  const data: Prisma.ExpenseUpdateManyMutationInput = {};
+  if (validated.amount !== undefined)
     data.amount = new Prisma.Decimal(validated.amount as string);
-  }
-  if (validated.spentAt !== undefined) {
+  if (validated.currency !== undefined)
+    data.currency = validated.currency as string;
+  if (validated.categoryId !== undefined)
+    data.categoryId = validated.categoryId as string;
+  if (validated.paymentMethod !== undefined)
+    data.paymentMethod = validated.paymentMethod as Prisma.ExpenseUpdateManyMutationInput["paymentMethod"];
+  if (validated.description !== undefined)
+    data.description = validated.description as string | null;
+  if (validated.spentAt !== undefined)
     data.spentAt = new Date(validated.spentAt as string);
-  }
 
   const { count } = await prisma.expense.updateMany({
     where: { id, userId },
@@ -123,19 +151,29 @@ export async function getSummary(userId: string, query: SummaryQuery) {
     where: { userId, spentAt: { gte: startDate, lte: endDate } },
     _sum: { amount: true },
   });
-  const totalAmount = (totalResult._sum.amount ?? new Prisma.Decimal(0)).toFixed(2);
+  const totalAmount = (
+    totalResult._sum.amount ?? new Prisma.Decimal(0)
+  ).toFixed(2);
 
   if (groupBy === "category") {
     const grouped = await prisma.expense.groupBy({
-      by: ["category"],
+      by: ["categoryId"],
       where: { userId, spentAt: { gte: startDate, lte: endDate } },
       _sum: { amount: true },
       _count: true,
     });
+
+    const categoryIds = grouped.map((g) => g.categoryId);
+    const categories = await prisma.expenseCategory.findMany({
+      where: { id: { in: categoryIds } },
+      select: { id: true, name: true },
+    });
+    const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
+
     return {
       totalAmount,
       byCategory: grouped.map((g) => ({
-        category: g.category,
+        category: categoryMap.get(g.categoryId) ?? g.categoryId,
         total: (g._sum.amount ?? new Prisma.Decimal(0)).toFixed(2),
         count: g._count,
       })),

@@ -1,16 +1,24 @@
-import { Expense, ExpenseCategory } from "@prisma/client";
+export type PaymentMethod = "CASH" | "KBZ_PAY" | "AYA_PAY" | "ONLINE_PAYMENT";
 
-export type ExpenseDTO = Omit<Expense, "amount" | "spentAt" | "createdAt" | "updatedAt"> & {
+export interface ExpenseDTO {
+  id: string;
+  userId: string;
   amount: string;
+  currency: string;
+  categoryId: string;
+  category: string;
+  paymentMethod: PaymentMethod;
+  description: string | null;
   spentAt: string;
   createdAt: string;
   updatedAt: string;
-};
+}
 
 export interface CreateExpenseBody {
   amount: number | string;
   currency?: string;
-  category: ExpenseCategory;
+  categoryId: string;
+  paymentMethod?: PaymentMethod;
   description?: string;
   spentAt: string;
 }

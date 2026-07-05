@@ -54,4 +54,71 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   error?: string;
+  pagination?: Pagination;
+}
+
+export interface ExpenseCategoryItem {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export type PaymentMethod = "CASH" | "KBZ_PAY" | "AYA_PAY" | "ONLINE_PAYMENT";
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH: "Cash",
+  KBZ_PAY: "KBZ Pay",
+  AYA_PAY: "AYA Pay",
+  ONLINE_PAYMENT: "Online Payment",
+};
+
+export interface Expense {
+  id: string;
+  userId: string;
+  amount: string;
+  currency: string;
+  categoryId: string;
+  category: string;
+  paymentMethod: PaymentMethod;
+  description?: string | null;
+  spentAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ExpenseListResult {
+  expenses: Expense[];
+  pagination: Pagination;
+}
+
+export interface ExpenseFilters {
+  startDate?: string;
+  endDate?: string;
+  category?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface DailyTotal {
+  date: string;
+  total: string;
+}
+
+export interface CategoryTotal {
+  category: string;
+  total: string;
+  count: number;
+}
+
+export interface ExpenseSummary {
+  totalAmount: string;
+  byDay?: DailyTotal[];
+  byCategory?: CategoryTotal[];
 }

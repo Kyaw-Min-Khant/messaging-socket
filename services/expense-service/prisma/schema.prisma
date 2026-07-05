@@ -7,32 +7,38 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ExpenseCategory {
-  FOOD
-  TRANSPORT
-  HOUSING
-  UTILITIES
-  HEALTHCARE
-  ENTERTAINMENT
-  SHOPPING
-  EDUCATION
-  TRAVEL
-  SAVINGS
-  OTHER
+enum PaymentMethod {
+  CASH
+  KBZ_PAY
+  AYA_PAY
+  ONLINE_PAYMENT
 }
 
 model Expense {
-  id          String          @id @default(uuid())
-  userId      String          @map("user_id")
-  amount      Decimal         @db.Decimal(12, 2)
-  currency    String          @default("USD") @db.Char(3)
-  category    ExpenseCategory @default(OTHER)
-  description String?         @db.VarChar(500)
-  spentAt     DateTime        @map("spent_at") @db.Date
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  amount        Decimal         @db.Decimal(12, 2)
+  currency      String          @default("MMK") @db.Char(3)
+  categoryId    String          @map("category_id")
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod   @default(CASH) @map("payment_method")
+  description   String?         @db.VarChar(500)
+  spentAt       DateTime        @map("spent_at") @db.Date
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
 
   @@index([userId, spentAt])
-  @@index([userId, category])
+  @@index([userId, categoryId])
   @@map("expenses")
+}
+
+model ExpenseCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique @db.VarChar(100)
+  description String?   @db.VarChar(500)
+  expenses    Expense[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("expense_categories")
 }

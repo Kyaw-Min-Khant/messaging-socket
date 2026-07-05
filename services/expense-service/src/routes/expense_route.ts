@@ -5,12 +5,14 @@ import {
   deleteExpenseController,
   getExpenseController,
   getSummaryController,
+  listCategoriesController,
   listExpensesController,
   updateExpenseController,
 } from "../controllers/expense_controller";
 
 const router = Router();
 
+router.get("/categories", auth, listCategoriesController);
 router.get("/summary", auth, getSummaryController);
 router.post("/", auth, createExpenseController);
 router.get("/", auth, listExpensesController);

@@ -8,7 +8,10 @@ declare global {
 export const prisma =
   global.__expensePrisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["warn", "error"],
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["warn", "error"]
+        : ["warn", "error"],
   });
 
 if (process.env.NODE_ENV === "development") {
