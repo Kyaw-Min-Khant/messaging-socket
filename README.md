@@ -1,167 +1,111 @@
-# Chat App Server
+# Messaging Platform
 
-A real-time chat application server built with Node.js, Express, TypeScript, and Socket.IO.
+A real-time messaging backend (Node.js, Express, TypeScript, Socket.IO, MongoDB) with JWT-cookie auth, friends/direct messaging, and Firebase push notifications — currently being split into microservices behind a single API gateway, alongside a new **Daily Expense Tracker** service backed by PostgreSQL/Prisma.
 
-## Features
+## Current architecture
 
-- Real-time messaging with Socket.IO
-- Room-based chat system
-- User join/leave notifications
-- Typing indicators
-- REST API endpoints
-- TypeScript support
-- CORS enabled for frontend integration
+The system is mid-migration from a single monolith into independent services. Today:
+
+- **The monolith** (`src/`, repo root) still owns 100% of auth, friends, and real-time messaging (MongoDB + Redis + Socket.IO + Firebase Admin). It runs unchanged and continues to serve production traffic.
+- **`services/gateway`** — a thin reverse proxy (new) that will become the single public entry point for both REST and Socket.IO. Today it proxies `/v1/api/expenses/*` to the new expense-service and everything else to the still-unsplit monolith.
+- **`services/expense-service`** — a brand-new, fully independent service (PostgreSQL + Prisma) for the expense tracker feature. It only trusts the shared `JWT_SECRET`-signed cookie; it has no dependency on Mongo, Redis, or any other service.
+- **`packages/shared-auth`**, **`packages/shared-errors`**, **`packages/shared-config`** — code shared across services (JWT verification, error classes, CORS) so auth/error logic isn't reimplemented per service.
+
+Planned next steps (not yet done): extracting `auth-service`, `user-service`, and `messaging-service` out of the monolith, one at a time, behind the gateway. See the migration plan for the full rollout sequence and rationale.
+
+## Repository layout
+
+```
+src/                        # the existing monolith — auth, friends, messaging, Socket.IO (untouched)
+client/                     # Vite/React frontend
+packages/
+  shared-auth/               # JWT verification, Express auth middleware, Socket.IO handshake auth
+  shared-errors/              # CustomError hierarchy + base error middleware
+  shared-config/              # CORS origin resolution
+services/
+  gateway/                    # public-facing REST + WebSocket proxy
+  expense-service/             # daily expense tracker (PostgreSQL + Prisma)
+docker-compose.yaml          # monolith replicas + postgres + expense-service + gateway
+```
 
 ## Prerequisites
 
-- Node.js (v16 or higher)
-- npm or yarn
+- Node.js v20+
+- npm
+- Docker (for Postgres locally, and for full-stack verification via `docker compose`)
+- MongoDB + Redis reachable via `.env` (Atlas/Redis Cloud in production, or local instances in dev)
 
-## Installation
+## Getting started
 
-1. Clone or download this project
-2. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file in the root directory:
-   ```bash
-   PORT=3001
-   CLIENT_URL=http://localhost:3000
-   NODE_ENV=development,
-   MONGODB_URI,
-   JWT_SECRET,
-   FIREBASE_PROJECT_ID,
-   FIREBASE_PRIVATE_KEY_ID
-   FIREBASE_CLIENT_EMAIL,
-   FIREBASE_CLIENT_ID,
-   REDIS_URL,
-   REDIS_PASSWORD,
-   REDIS_PORT,
-   JWT_EXPIRES_IN
-   ```
-
-## Available Scripts
-
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build TypeScript to JavaScript
-- `npm start` - Start production server
-- `npm test` - Run tests
-
-## Development
-
-Start the development server:
+### Run the existing monolith only (unchanged workflow)
 
 ```bash
+npm install
+cp .env.example .env   # fill in MONGODB_URI, JWT_SECRET, REDIS_*, FIREBASE_* etc.
 npm run dev
 ```
 
-The server will start on `http://localhost:3001` (or the port specified in your `.env` file).
+Starts on `http://localhost:1500` (or `PORT` from `.env`).
 
-## API Endpoints
+### Run the new services (gateway + expense-service) locally
 
-### REST API
-
-- `GET /` - Server status and info
-- `GET /api/users` - Get all connected users
-- `GET /api/rooms` - Get all active rooms
-
-### Socket.IO Events
-
-#### Client to Server
-
-- `join` - Join a chat room
-
-  ```javascript
-  socket.emit("join", { username: "John", room: "general" });
-  ```
-
-- `sendMessage` - Send a message
-
-  ```javascript
-  socket.emit("sendMessage", { message: "Hello world!", room: "general" });
-  ```
-
-- `typing` - Send typing indicator
-
-  ```javascript
-  socket.emit("typing", { isTyping: true, room: "general" });
-  ```
-
-- `changeRoom` - Change to a different room
-  ```javascript
-  socket.emit("changeRoom", { newRoom: "random" });
-  ```
-
-#### Server to Client
-
-- `userJoined` - User joined the room
-- `userLeft` - User left the room
-- `newMessage` - New message received
-- `userTyping` - User typing indicator
-- `roomUsers` - List of users in current room
-
-## Client Integration Example
-
-Here's a basic example of how to connect from a client:
-
-```javascript
-import { io } from "socket.io-client";
-
-const socket = io("http://localhost:3001");
-
-// Join a room
-socket.emit("join", { username: "YourName", room: "general" });
-
-// Listen for messages
-socket.on("newMessage", (message) => {
-  console.log("New message:", message);
-});
-
-// Send a message
-socket.emit("sendMessage", { message: "Hello everyone!" });
-
-// Listen for user events
-socket.on("userJoined", (data) => {
-  console.log(`${data.username} joined the chat`);
-});
-
-socket.on("userLeft", (data) => {
-  console.log(`${data.username} left the chat`);
-});
+```bash
+npm install                 # installs root + all workspaces (services/*, packages/*)
+cp services/expense-service/.env.example services/expense-service/.env
+cp services/gateway/.env.example services/gateway/.env
+# JWT_SECRET in services/expense-service/.env MUST match the monolith's .env exactly
+npm run dev:services        # boots gateway + expense-service together via concurrently
 ```
 
-## Project Structure
+`expense-service` needs a real Postgres reachable at its `DATABASE_URL` — either run one locally or use the Docker Compose flow below.
 
-```
-├── src/
-│   └── index.ts          # Main server file
-├── dist/                 # Compiled JavaScript (generated)
-├── package.json          # Dependencies and scripts
-├── tsconfig.json         # TypeScript configuration
-└── README.md            # This file
+### Full stack via Docker Compose
+
+```bash
+docker compose up -d --build postgres expense-service gateway
 ```
 
-## Environment Variables
+This brings up Postgres, the expense-service (running its own `prisma migrate deploy` on start), and the gateway (proxying `/v1/api/expenses/*` to expense-service and everything else to `app1`, one of the monolith replicas). Add `app1 app2 app3` to the command to also bring up the monolith itself.
 
-- `PORT` - Server port (default: 3001)
-- `CLIENT_URL` - Allowed CORS origin (default: http://localhost:3000)
-- `NODE_ENV` - Environment mode (development/production)
+## Available scripts (root)
 
-## Building for Production
+- `npm run dev` — monolith dev server (`ts-node-dev` on `src/index.ts`)
+- `npm run build` — compile the monolith
+- `npm start` — run the compiled monolith
+- `npm run dev:services` — boot `services/gateway` + `services/expense-service` together
+- `npm run build:services` — build every workspace under `services/*`/`packages/*`
 
-1. Build the TypeScript code:
+Each workspace under `services/*` also has its own `dev`/`build`/`start` (e.g. `npm run dev -w services/expense-service`).
 
-   ```bash
-   npm run build
-   ```
+## API overview
 
-2. Start the production server:
-   ```bash
-   npm start
-   ```
+All REST endpoints are namespaced under `/v1/api`. Each service (and the monolith) exposes interactive Swagger docs at `/api-docs` while running standalone.
+
+### Monolith (auth / friends / messaging)
+
+- `POST /v1/api/auth/register`, `/login`, `/logout`, `GET /auth/user`, `PUT /auth/fcmtoken`
+- `GET /v1/api/users`, `POST /users/addfriend`, `GET /users/friendrequest`, `PUT /users/confirm_request`, `GET /users/friends`, `PUT /users/avatar`
+- `GET /v1/api/conversations/:friend_id/messages`
+- Socket.IO events: `sendDirectMessage`, `typing`, `markAsRead`, `newDirectMessage`, `messageSent`, `messageRead`, `userOnline`, `userOffline`
+
+### Expense tracker (new)
+
+- `POST /v1/api/expenses` — create an expense
+- `GET /v1/api/expenses` — list expenses (filter by `startDate`/`endDate`/`category`, paginated)
+- `GET /v1/api/expenses/:id` — get one
+- `PUT /v1/api/expenses/:id` — update
+- `DELETE /v1/api/expenses/:id` — delete
+- `GET /v1/api/expenses/summary` — totals grouped by day or category
+
+All expense endpoints require the same `token` JWT cookie issued by the monolith's auth flow, and are always scoped to the authenticated user.
+
+## Environment variables
+
+See `.env.example` (monolith), `services/expense-service/.env.example`, and `services/gateway/.env.example`. The one hard rule across every service: **`JWT_SECRET` must be byte-identical everywhere** — it is never rotated as part of the ongoing service split, since doing so would invalidate every currently-issued session cookie.
+
+## Deployment
+
+Production target is Render.com (see the "Render production checklist" comments in `.env.example`). MongoDB and Redis stay on their existing external providers (Atlas / Redis Cloud) throughout the migration; only the expense-service introduces a new managed Postgres instance.
 
 ## Contributing
 

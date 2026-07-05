@@ -1,0 +1,15 @@
+{
+  "name": "@app/shared-config",
+  "version": "1.0.0",
+  "description": "Shared config helpers (CORS origin resolution) for messaging-platform services",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2"
+  }
+}

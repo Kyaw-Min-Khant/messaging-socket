@@ -1,14 +1,14 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { login } from '../api/auth';
-import { useAuth } from '../contexts/AuthContext';
-import toast from 'react-hot-toast';
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { login } from "../api/auth";
+import { useAuth } from "../contexts/AuthContext";
+import toast from "react-hot-toast";
 
 export function Login() {
   const { setUser } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -17,10 +17,9 @@ export function Login() {
     try {
       const user = await login(email, password);
       setUser(user);
-      navigate('/');
+      navigate("/");
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Login failed';
+      const msg = err instanceof Error ? err.message : "Login failed";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -87,13 +86,13 @@ export function Login() {
                 Signing in...
               </span>
             ) : (
-              'Sign in'
+              "Sign in"
             )}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-400 mt-6">
-          Don&apos;t have an account?{' '}
+          Don&apos;t have an account?{" "}
           <Link
             to="/register"
             className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"

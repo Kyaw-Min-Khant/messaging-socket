@@ -3,11 +3,17 @@
   "version": "1.0.0",
   "description": "Real-time messaging server with authentication",
   "main": "dist/index.js",
+  "workspaces": [
+    "services/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "test": "npm run test"
+    "test": "npm run test",
+    "dev:services": "concurrently -n gateway,expense -c blue,cyan \"npm:dev -w services/gateway\" \"npm:dev -w services/expense-service\"",
+    "build:services": "npm run build --workspaces --if-present"
   },
   "keywords": [
     "messaging-server",
@@ -52,6 +58,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^9.0.7",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.2"
+    "typescript": "^5.3.2",
+    "concurrently": "^8.2.2"
   }
 }
