@@ -60,11 +60,13 @@ export const login = async (
       password,
       fcmtoken,
     });
-    const isProduction = process.env.NODE_ENV === "production";
+    const isDeployed =
+      process.env.NODE_ENV === "production" ||
+      process.env.NODE_ENV === "golive";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "strict" : "lax",
+      secure: isDeployed,
+      sameSite: isDeployed ? "none" : "lax",
       maxAge: 15 * 24 * 60 * 60 * 1000,
     });
     res.json({
@@ -150,10 +152,20 @@ export const logout = async (
       throw new UnauthorizedError("User not found");
     }
 
-    await User.findByIdAndUpdate(user.id, { isOnline: false, lastSeen: new Date() });
+    await User.findByIdAndUpdate(user.id, {
+      isOnline: false,
+      lastSeen: new Date(),
+    });
     await invalidateUserCache(String(user.id));
 
-    res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
+    const isDeployed =
+      process.env.NODE_ENV === "production" ||
+      process.env.NODE_ENV === "golive";
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: isDeployed,
+      sameSite: isDeployed ? "none" : "lax",
+    });
     res.json({
       success: true,
       message: "Logout successful",
