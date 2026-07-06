@@ -45,6 +45,46 @@ export const register = async (
 // @desc    Login user
 // @route   POST /api/auth/login
 // @access  Public
+const MAX_AGE_SEC = 15 * 24 * 60 * 60;
+
+function setAuthCookie(res: Response, token: string): void {
+  const isDeployed =
+    process.env.NODE_ENV === "production" ||
+    process.env.NODE_ENV === "golive";
+
+  if (isDeployed) {
+    // SameSite=None; Partitioned (CHIPS) — required for cross-site cookies on
+    // Safari ITP and Chrome CHIPS. vercel.app and onrender.com are different
+    // registrable domains, so standard SameSite=None alone is blocked on iOS Safari.
+    res.setHeader(
+      "Set-Cookie",
+      `token=${token}; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${MAX_AGE_SEC}; Path=/`,
+    );
+  } else {
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: MAX_AGE_SEC * 1000,
+    });
+  }
+}
+
+function clearAuthCookie(res: Response): void {
+  const isDeployed =
+    process.env.NODE_ENV === "production" ||
+    process.env.NODE_ENV === "golive";
+
+  if (isDeployed) {
+    res.setHeader(
+      "Set-Cookie",
+      `token=; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=0; Path=/`,
+    );
+  } else {
+    res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
+  }
+}
+
 export const login = async (
   req: Request,
   res: Response,
@@ -60,15 +100,7 @@ export const login = async (
       password,
       fcmtoken,
     });
-    const isDeployed =
-      process.env.NODE_ENV === "production" ||
-      process.env.NODE_ENV === "golive";
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isDeployed,
-      sameSite: isDeployed ? "none" : "lax",
-      maxAge: 15 * 24 * 60 * 60 * 1000,
-    });
+    setAuthCookie(res, token);
     res.json({
       success: true,
       data: { user },
@@ -158,14 +190,7 @@ export const logout = async (
     });
     await invalidateUserCache(String(user.id));
 
-    const isDeployed =
-      process.env.NODE_ENV === "production" ||
-      process.env.NODE_ENV === "golive";
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: isDeployed,
-      sameSite: isDeployed ? "none" : "lax",
-    });
+    clearAuthCookie(res);
     res.json({
       success: true,
       message: "Logout successful",
