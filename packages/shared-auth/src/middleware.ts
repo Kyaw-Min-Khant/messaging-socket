@@ -21,14 +21,21 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
         req as Request & { cookies?: Record<string, string> }
       ).cookies?.token;
 
-      if (!cookieToken) {
+      // Fallback: accept Bearer token from Authorization header (used by Swagger UI / API clients)
+      const bearerToken = req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.slice(7)
+        : undefined;
+
+      const token = cookieToken ?? bearerToken;
+
+      if (!token) {
         return res.status(401).json({
           success: false,
           error: "Access denied. No token provided.",
         });
       }
 
-      const decoded = verifyToken(cookieToken, options.jwtSecret);
+      const decoded = verifyToken(token, options.jwtSecret);
 
       if (options.resolveUser) {
         const user = await options.resolveUser(decoded);
