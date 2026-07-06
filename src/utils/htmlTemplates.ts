@@ -324,7 +324,10 @@ export const getWelcomeHTML = () => `
         <a href="/api-docs" target="_blank">API Documentation</a>
         <div class="sub-desc">View full backend API reference (Swagger UI).</div>
       </div>
-
+      <div class="action-box">
+        <a href="https://expense-service-8i5i.onrender.com/api-docs" target="_blank">Expense API Docs</a>
+        <div class="sub-desc">View expense api reference.(Swagger UI)</div>
+      </div>
       <div class="action-box">
         <a href="https://messaging-socket-gray.vercel.app/" target="_blank">Demo Web App</a>
         <div class="sub-desc">Try the live demo version of the Messenger web app.</div>
