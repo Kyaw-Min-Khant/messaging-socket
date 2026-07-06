@@ -1,3 +1,4 @@
+import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -32,9 +33,15 @@ const options = {
     info: {
       title: "Expense Tracker API",
       version: "1.0.0",
+      description: "Daily expense tracker — create, list, update and delete expenses. All routes require a valid JWT cookie issued by the auth service.",
     },
+    servers: [{ url: "/v1/api", description: "Current server" }],
   },
-  apis: ["./src/routes/*.ts"],
+  // __dirname resolves to src/ in dev (ts-node) and dist/ in production (compiled JS)
+  apis: [
+    path.join(__dirname, "routes", "*.ts"),
+    path.join(__dirname, "routes", "*.js"),
+  ],
 };
 const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

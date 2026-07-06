@@ -326,7 +326,7 @@ export const getWelcomeHTML = () => `
       </div>
 
       <div class="action-box">
-        <a href="https://messaging-app-8bbd6.web.app/login.html" target="_blank">Demo Web App</a>
+        <a href="https://messaging-socket-gray.vercel.app/" target="_blank">Demo Web App</a>
         <div class="sub-desc">Try the live demo version of the Messenger web app.</div>
       </div>
 
