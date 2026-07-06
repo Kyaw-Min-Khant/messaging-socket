@@ -39,6 +39,7 @@ const authLimiter = rateLimit({
   max: 50,
   message: "Too many auth attempts, please try again later.",
 });
+
 app.use("/v1/api/auth/login", authLimiter);
 app.use("/v1/api/auth/register", authLimiter);
 
@@ -96,7 +97,8 @@ if (process.env.EXPENSE_SERVICE_URL) {
           if ("headersSent" in res && !res.headersSent) {
             (res as import("express").Response).status(503).json({
               success: false,
-              error: "Expense service is starting up. Please try again in a moment.",
+              error:
+                "Expense service is starting up. Please try again in a moment.",
             });
           }
         },
