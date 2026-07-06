@@ -76,6 +76,8 @@ app.use(
 
 app.use(cookieParser());
 
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 // Proxy /v1/api/expenses to the expense microservice — placed before body
 // parsing so the raw request stream is forwarded intact.
 if (process.env.EXPENSE_SERVICE_URL) {
@@ -85,12 +87,10 @@ if (process.env.EXPENSE_SERVICE_URL) {
       target: process.env.EXPENSE_SERVICE_URL,
       changeOrigin: true,
       xfwd: true,
+      pathRewrite: { "^/": "/v1/api/expenses/" },
     }),
   );
 }
-
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // Logging middleware
 if (process.env.NODE_ENV === "development") {
