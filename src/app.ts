@@ -6,7 +6,7 @@ import compression from "compression";
 import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
-import { createProxyMiddleware } from "http-proxy-middleware";
+import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import routes from "./routes";
 import {
   get404HTML,
@@ -88,6 +88,7 @@ if (process.env.EXPENSE_SERVICE_URL) {
       changeOrigin: true,
       xfwd: true,
       pathRewrite: { "^/": "/v1/api/expenses/" },
+      on: { proxyReq: fixRequestBody },
     }),
   );
 }
