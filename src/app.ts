@@ -87,8 +87,20 @@ if (process.env.EXPENSE_SERVICE_URL) {
       target: process.env.EXPENSE_SERVICE_URL,
       changeOrigin: true,
       xfwd: true,
+      proxyTimeout: 10000,
+      timeout: 10000,
       pathRewrite: { "^/": "/v1/api/expenses/" },
-      on: { proxyReq: fixRequestBody },
+      on: {
+        proxyReq: fixRequestBody,
+        error: (_err, _req, res) => {
+          if ("headersSent" in res && !res.headersSent) {
+            (res as import("express").Response).status(503).json({
+              success: false,
+              error: "Expense service is starting up. Please try again in a moment.",
+            });
+          }
+        },
+      },
     }),
   );
 }

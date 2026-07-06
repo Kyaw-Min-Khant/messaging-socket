@@ -50,6 +50,15 @@ const startServer = async () => {
     // Register Socket.IO handlers
     registerSocketHandlers(io);
 
+    // Wake up expense-service on startup so it is warm before the first client request
+    if (process.env.EXPENSE_SERVICE_URL) {
+      const healthUrl = `${process.env.EXPENSE_SERVICE_URL}/v1/api/health`;
+      console.log(`⏳ Waking expense-service at ${healthUrl} ...`);
+      fetch(healthUrl, { signal: AbortSignal.timeout(60_000) })
+        .then((r) => console.log(`✅ Expense service is up (${r.status})`))
+        .catch(() => console.warn("⚠️  Expense service did not respond during startup — it may still be waking up"));
+    }
+
     server.listen(PORT, () => {
       console.log(`🚀 Real-time messaging ${SERVER} running on port ${PORT}`);
       console.log(`📡 Socket.IO server ready for connections`);
