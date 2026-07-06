@@ -27,8 +27,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
 
-    // Cookie is sent automatically — no need to pass token manually
-    const s = io("/", {
+    // In production VITE_API_URL = https://host/v1/api — extract the origin.
+    // In local dev (no VITE_API_URL) fall back to "/" so Vite proxy handles it.
+    const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+    const socketUrl = apiUrl ? new URL(apiUrl).origin : "/";
+
+    const s = io(socketUrl, {
       withCredentials: true,
       transports: ["websocket"],
     });
