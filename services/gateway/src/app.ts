@@ -34,7 +34,11 @@ app.use(
 );
 
 app.get("/health", (_req, res) => {
-  res.json({ success: true, message: "Gateway is running", timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    message: "Gateway is running",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.use("/v1/api", generalLimiter);

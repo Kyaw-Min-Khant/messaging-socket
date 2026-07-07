@@ -57,7 +57,9 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
           .json({ success: false, error: "Token expired." });
       }
       if (error instanceof jwt.JsonWebTokenError) {
-        return res.status(401).json({ success: false, error: "Invalid token." });
+        return res
+          .status(401)
+          .json({ success: false, error: "Invalid token." });
       }
       return next(error);
     }

@@ -15,12 +15,7 @@ export type OrmErrorMapper = (err: unknown) => MappedError | null;
  * the CustomError-handling contract stays identical everywhere.
  */
 export function createErrorHandler(ormMapper?: OrmErrorMapper) {
-  return (
-    err: Error,
-    _req: Request,
-    res: Response,
-    _next: NextFunction,
-  ) => {
+  return (err: Error, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof CustomError) {
       return res.status(err.statusCode).json({
         success: false,
