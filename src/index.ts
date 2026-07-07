@@ -34,6 +34,39 @@ const io = new Server(server, {
   },
 });
 
+async function waitForExpenseService(baseUrl: string): Promise<void> {
+  const healthUrl = `${baseUrl}/v1/api/health`;
+  const MAX_ATTEMPTS = 30; // 30 × 5 s = 2.5 minutes
+  const INTERVAL_MS = 5_000;
+
+  console.log(`⏳ Waiting for expense-service at ${healthUrl} ...`);
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(healthUrl, {
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (res.ok) {
+        console.log(
+          `✅ Expense service is ready (attempt ${attempt}/${MAX_ATTEMPTS})`,
+        );
+        return;
+      }
+    } catch {
+      // not ready yet — swallow and retry
+    }
+    console.log(
+      `⏳ Expense service not ready yet (${attempt}/${MAX_ATTEMPTS}), retrying in ${INTERVAL_MS / 1000}s...`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS));
+  }
+
+  // After all retries, exit so Render restarts the service rather than
+  // silently serving a monolith with a broken expense dependency.
+  console.error("❌ Expense service did not become ready in time. Exiting.");
+  process.exit(1);
+}
+
 const PORT = process.env.PORT || 3001;
 const SERVER = process.env.APP_NAME;
 const startServer = async () => {
@@ -50,13 +83,9 @@ const startServer = async () => {
     // Register Socket.IO handlers
     registerSocketHandlers(io);
 
-    // Wake up expense-service on startup so it is warm before the first client request
+    // Block startup until expense-service is healthy
     if (process.env.EXPENSE_SERVICE_URL) {
-      const healthUrl = `${process.env.EXPENSE_SERVICE_URL}/v1/api/health`;
-      console.log(`⏳ Waking expense-service at ${healthUrl} ...`);
-      fetch(healthUrl, { signal: AbortSignal.timeout(60_000) })
-        .then((r) => console.log(`✅ Expense service is up (${r.status})`))
-        .catch(() => console.warn("⚠️  Expense service did not respond during startup — it may still be waking up"));
+      await waitForExpenseService(process.env.EXPENSE_SERVICE_URL);
     }
 
     server.listen(PORT, () => {
