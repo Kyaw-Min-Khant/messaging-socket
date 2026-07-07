@@ -16,7 +16,21 @@ export const expenseProxy = createProxyMiddleware({
   target: EXPENSE_SERVICE_URL,
   changeOrigin: true,
   xfwd: true,
+  proxyTimeout: 10000,
+  timeout: 10000,
   pathRewrite: { "^/": "/v1/api/expenses/" },
+  onError: (_err, _req, res) => {
+    if (!res.headersSent) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          success: false,
+          error:
+            "Expense service is starting up. Please try again in a moment.",
+        }),
+      );
+    }
+  },
 });
 
 export const monolithProxy = createProxyMiddleware({
