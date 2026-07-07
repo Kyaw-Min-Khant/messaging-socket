@@ -16,6 +16,7 @@ export const expenseProxy = createProxyMiddleware({
   target: EXPENSE_SERVICE_URL,
   changeOrigin: true,
   xfwd: true,
+  pathRewrite: { "^/": "/v1/api/expenses/" },
 });
 
 export const monolithProxy = createProxyMiddleware({
