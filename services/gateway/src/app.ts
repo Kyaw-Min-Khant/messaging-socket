@@ -45,8 +45,9 @@ app.use("/v1/api", generalLimiter);
 app.use("/v1/api/auth/login", authLimiter);
 app.use("/v1/api/auth/register", authLimiter);
 
-// Extracted service(s) — checked first, most specific route wins.
-app.use("/v1/api/expenses", expenseProxy);
+// expenseProxy has its own path filter ("/v1/api/expenses") built in,
+// so mount at root — hpm matches internally and forwards the full path.
+app.use(expenseProxy);
 
 // Everything else still lives on the original monolith, unchanged, until
 // its own extraction phase cuts the relevant prefix over above this line.

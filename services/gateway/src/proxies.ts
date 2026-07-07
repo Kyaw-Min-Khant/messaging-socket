@@ -12,13 +12,14 @@ const EXPENSE_SERVICE_URL =
   process.env.EXPENSE_SERVICE_URL ?? "http://localhost:4004";
 const MONOLITH_URL = process.env.MONOLITH_URL ?? "http://localhost:1500";
 
-export const expenseProxy = createProxyMiddleware({
+// Pass the path as first arg so hpm v2 matches internally — Express never
+// strips the prefix, so the full /v1/api/expenses/* path reaches the target.
+export const expenseProxy = createProxyMiddleware("/v1/api/expenses", {
   target: EXPENSE_SERVICE_URL,
   changeOrigin: true,
   xfwd: true,
   proxyTimeout: 10000,
   timeout: 10000,
-  pathRewrite: { "^/": "/v1/api/expenses/" },
   onError: (_err, _req, res) => {
     if (!res.headersSent) {
       res.writeHead(503, { "Content-Type": "application/json" });
