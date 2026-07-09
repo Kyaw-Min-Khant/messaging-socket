@@ -1,84 +1,70 @@
-version: "1"
 services:
-  app1:
-    build: .
-    environment:
-      - APP_NAME=App1
-    ports:
-      - "3001:3000"
-    networks:
-      - backend
-
-  app2:
-    build: .
-    environment:
-      - APP_NAME=App2
-    ports:
-      - "3002:3000"
-    networks:
-      - backend
-
-  app3:
-    build: .
-    environment:
-      - APP_NAME=App3
-    ports:
-      - "3003:3000"
-    networks:
-      - backend
-
-  # --- New microservices world (additive — app1/2/3 above are the still-live,
-  # unmodified monolith and keep serving 100% of existing traffic until each
-  # feature's own extraction phase cuts the gateway's routing over) ---
-
+  # ── PostgreSQL (local — only expense-service uses it) ──────────────────────
   postgres:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=expenses
-    ports:
-      - "5433:5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: expenses
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - backend
+    restart: unless-stopped
 
+  # ── Expense service (internal only — no public port) ───────────────────────
   expense-service:
     build:
       context: .
       dockerfile: services/expense-service/Dockerfile
-    env_file:
-      - services/expense-service/.env
+    env_file: services/expense-service/.env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/expenses?schema=public
+      NODE_ENV: production
+      # Overrides DATABASE_URL in .env — points to local postgres container
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/expenses?schema=public
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - backend
+    restart: unless-stopped
 
+  # ── Monolith — auth, messaging, users (internal only — no public port) ─────
+  monolith:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    networks:
+      - backend
+    restart: unless-stopped
+
+  # ── Gateway — the only publicly exposed service ────────────────────────────
   gateway:
     build:
       context: .
       dockerfile: services/gateway/Dockerfile
-    env_file:
-      - services/gateway/.env
+    env_file: services/gateway/.env
     environment:
-      - EXPENSE_SERVICE_URL=http://expense-service:3000
-      - MONOLITH_URL=http://app1:3000
+      NODE_ENV: production
+      # Docker service names resolve to internal IPs — no public URLs needed
+      MONOLITH_URL: http://monolith:3001
+      EXPENSE_SERVICE_URL: http://expense-service:4004
     ports:
-      - "8080:3000"
+      - "80:4000"   # server port 80 → gateway port 4000
     depends_on:
+      - monolith
       - expense-service
-      - app1
     networks:
       - backend
+    restart: unless-stopped
 
 networks:
   backend:

@@ -4,8 +4,6 @@ WORKDIR /app
 
 COPY package*.json ./
 
-COPY .env ./
-
 RUN npm install
 
 COPY tsconfig.json ./

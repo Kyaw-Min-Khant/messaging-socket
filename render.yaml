@@ -1,26 +1,13 @@
-# Render Blueprint — deploys the new microservices world alongside the
-# still-live monolith (which is NOT part of this blueprint; it keeps running
-# wherever it already runs today). Deploy with: Render Dashboard -> New ->
-# Blueprint -> point at this repo.
-#
-# Only gateway + expense-service exist so far. When auth-service/user-service/
-# messaging-service are extracted later, add one `type: web` entry per service
-# here (same shape as expense-service below), each referencing the same
-# `shared-secrets` env var group so JWT_SECRET stays identical everywhere.
-
 envVarGroups:
   - name: shared-secrets
     envVars:
-      # Must be byte-identical to whatever JWT_SECRET the existing monolith
-      # already signs cookies with — set manually in the Render dashboard,
-      # never committed here. Rotating it logs out every current user.
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRES_IN
         value: 15d
 
 services:
-  # Public entry point — the only service with a public URL.
+  # ── Gateway — the only service with a public URL ───────────────────────────
   - type: web
     name: gateway
     env: docker
@@ -32,22 +19,48 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Your production client origin(s), comma-separated — used for CORS.
       - key: CLIENT_URL
         sync: false
-      # Internal address of expense-service, resolved automatically by Render
-      # at deploy time via its private networking (no public URL needed).
+      # Internal addresses — resolved via Render private networking (no public URL)
+      - key: MONOLITH_URL
+        fromService:
+          type: web
+          name: monolith
+          property: hostport
       - key: EXPENSE_SERVICE_URL
         fromService:
           type: web
           name: expense-service
           property: hostport
-      # The still-live monolith's existing public URL (auth/users/messaging
-      # traffic still goes straight there until each feature is extracted).
-      - key: MONOLITH_URL
+
+  # ── Monolith — auth, messaging, users (internal only) ─────────────────────
+  - type: web
+    name: monolith
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: shared-secrets
+      # Set these manually in the Render dashboard
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
         sync: false
 
-  # New, fully independent feature — PostgreSQL (Neon) via Prisma.
+  # ── Expense service (internal only) ───────────────────────────────────────
   - type: web
     name: expense-service
     env: docker
@@ -60,11 +73,5 @@ services:
       - key: NODE_ENV
         value: production
       - fromGroup: shared-secrets
-      # Neon (or any Postgres) connection string — paste in the Render
-      # dashboard, not committed here.
       - key: DATABASE_URL
-        sync: false
-      # Only relevant for this service's own standalone CORS/Swagger use
-      # before the gateway centralizes CORS — safe to leave unset.
-      - key: CLIENT_URL
         sync: false
