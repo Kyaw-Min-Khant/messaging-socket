@@ -4,7 +4,8 @@ import { createErrorHandler, MappedError } from "@app/shared-errors";
 function mapPrismaError(err: unknown): MappedError | null {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
-      const target = (err.meta?.target as string[] | undefined)?.join(", ") ?? "field";
+      const target =
+        (err.meta?.target as string[] | undefined)?.join(", ") ?? "field";
       return { statusCode: 409, message: `${target} already exists.` };
     }
     if (err.code === "P2025") {

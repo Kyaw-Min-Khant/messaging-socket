@@ -27,6 +27,7 @@ services:
       NODE_ENV: production
       # Overrides DATABASE_URL in .env — points to local postgres container
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/expenses?schema=public
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-local-dev-internal-secret}
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,6 +43,10 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      PORT: 1500
+      # Shared with the gateway so this service can reject anything that did
+      # not come through it. Override in a real deployment.
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-local-dev-internal-secret}
     networks:
       - backend
     restart: unless-stopped
@@ -55,8 +60,9 @@ services:
     environment:
       NODE_ENV: production
       # Docker service names resolve to internal IPs — no public URLs needed
-      MONOLITH_URL: http://monolith:3001
+      MONOLITH_URL: http://monolith:1500
       EXPENSE_SERVICE_URL: http://expense-service:4004
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-local-dev-internal-secret}
     ports:
       - "80:4000"   # server port 80 → gateway port 4000
     depends_on:

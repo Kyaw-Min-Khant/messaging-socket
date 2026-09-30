@@ -3,13 +3,9 @@ import expenseRoutes from "./expense_route";
 
 const router = Router();
 
-router.get("/health", (_req, res) => {
-  res.json({
-    success: true,
-    message: "Expense service is running",
-    timestamp: new Date().toISOString(),
-  });
-});
+// NOTE: /v1/api/health is registered directly on the app (src/app.ts), ahead
+// of the rate limiter and the internal guard, so probes are never throttled
+// or rejected. Do not re-add it here — it would be unreachable.
 
 router.use("/expenses", expenseRoutes);
 

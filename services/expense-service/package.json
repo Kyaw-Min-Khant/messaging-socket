@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@app/shared-auth": "*",
+    "@app/shared-config": "*",
     "@app/shared-errors": "*",
     "@prisma/client": "^5.20.0",
     "compression": "^1.7.4",

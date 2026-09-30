@@ -19,12 +19,9 @@ export const connectDB = async (): Promise<void> => {
       console.log("⚠️ MongoDB disconnected");
     });
 
-    // Graceful shutdown
-    process.on("SIGINT", async () => {
-      await mongoose.connection.close();
-      console.log("MongoDB connection closed through app termination");
-      process.exit(0);
-    });
+    // NOTE: shutdown is owned by registerShutdown in src/index.ts, which closes
+    // the HTTP server and Socket.IO before disconnecting Mongo and Redis. A
+    // SIGINT handler here would race it and exit before the drain completed.
   } catch (error) {
     console.error("❌ Error connecting to MongoDB:", error);
     process.exit(1);

@@ -3,6 +3,7 @@ dotenv.config();
 
 import app from "./app";
 import { prisma } from "./config/prisma";
+import { registerShutdown } from "@app/shared-config";
 
 if (!process.env.JWT_SECRET) {
   console.error("FATAL: JWT_SECRET is not set. Exiting.");
@@ -13,9 +14,10 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
+// Log but do not exit: one rejected promise should not drop every in-flight
+// response and sever the Postgres pool.
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
-  process.exit(1);
 });
 process.on("uncaughtException", (err) => {
   console.error("Uncaught exception:", err);
@@ -27,9 +29,13 @@ const PORT = process.env.PORT || 4004;
 const startServer = async () => {
   try {
     await prisma.$connect();
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`💰 Expense service running on port ${PORT}`);
       console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
+    });
+
+    registerShutdown(server, [() => prisma.$disconnect()], {
+      name: "expense-service",
     });
   } catch (error) {
     console.error("❌ Failed to start expense-service:", error);

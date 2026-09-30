@@ -5,6 +5,11 @@ envVarGroups:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 15d
+      # Lets the backends reject traffic that did not come through the gateway.
+      # Needed because private services (type: pserv) are not on the free plan,
+      # so monolith and expense-service each have a public URL.
+      - key: INTERNAL_SECRET
+        generateValue: true
 
 services:
   # ── Gateway — the only service with a public URL ───────────────────────────
@@ -19,9 +24,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - fromGroup: shared-secrets
       - key: CLIENT_URL
         sync: false
-      # Internal addresses — resolved via Render private networking (no public URL)
+      # Backend addresses. NOTE: these are type: web, so they DO have public
+      # URLs (pserv is not on the free plan) — INTERNAL_SECRET is what keeps
+      # them gateway-only. hostport yields host:port with no scheme; the
+      # gateway prepends http:// (see services/gateway/src/proxies.ts).
       - key: MONOLITH_URL
         fromService:
           type: web
@@ -33,7 +42,7 @@ services:
           name: expense-service
           property: hostport
 
-  # ── Monolith — auth, messaging, users (internal only) ─────────────────────
+  # ── Monolith — auth, messaging, users (public URL, gateway-only via secret) ─
   - type: web
     name: monolith
     env: docker
@@ -41,7 +50,7 @@ services:
     region: singapore
     dockerfilePath: Dockerfile
     dockerContext: .
-    healthCheckPath: /health
+    healthCheckPath: /v1/api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -49,18 +58,33 @@ services:
       # Set these manually in the Render dashboard
       - key: MONGODB_URI
         sync: false
+      # src/config/redis.ts reads host, port AND password separately — Redis
+      # Cloud uses a non-default port and requires auth, so all three are
+      # required. Without them the client silently falls back to :6379 with no
+      # password and /v1/api/health reports redis:false.
       - key: REDIS_URL
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
         sync: false
       - key: CLIENT_URL
         sync: false
+      # All five are read by src/config/firebase.ts.
       - key: FIREBASE_PROJECT_ID
         sync: false
       - key: FIREBASE_CLIENT_EMAIL
         sync: false
       - key: FIREBASE_PRIVATE_KEY
         sync: false
+      - key: FIREBASE_PRIVATE_KEY_ID
+        sync: false
+      - key: FIREBASE_CLIENT_ID
+        sync: false
+      - key: APP_NAME
+        value: Messaging App
 
-  # ── Expense service (internal only) ───────────────────────────────────────
+  # ── Expense service (public URL, gateway-only via INTERNAL_SECRET) ────────
   - type: web
     name: expense-service
     env: docker
@@ -73,5 +97,7 @@ services:
       - key: NODE_ENV
         value: production
       - fromGroup: shared-secrets
+      - key: CLIENT_URL
+        sync: false
       - key: DATABASE_URL
         sync: false

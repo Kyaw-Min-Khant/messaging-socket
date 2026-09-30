@@ -12,5 +12,5 @@ COPY services/gateway/tsconfig.json ./services/gateway/
 COPY services/gateway/src ./services/gateway/src
 RUN npm run build -w services/gateway
 
-EXPOSE 3000
+EXPOSE 4000
 CMD ["node", "services/gateway/dist/index.js"]
