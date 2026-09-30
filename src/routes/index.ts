@@ -4,13 +4,9 @@ import user_routes from "./user_route";
 import message_routes from "./message_route";
 const router = Router();
 
-router.get("/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "Server is running",
-    timestamp: new Date().toISOString(),
-  });
-});
+// NOTE: /v1/api/health is registered directly on the app (src/app.ts), ahead
+// of the rate limiter and the internal-only guard, so probes are never
+// throttled or rejected. Do not re-add it here — it would be unreachable.
 
 // API routes
 router.use("/auth", authRoutes);

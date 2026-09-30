@@ -32,9 +32,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
     const socketUrl = apiUrl ? new URL(apiUrl).origin : "/";
 
+    // Default transport order (polling → upgrade to websocket). The gateway
+    // proxies both: /socket.io as Express middleware for the polling
+    // handshake, plus the raw "upgrade" event for the WebSocket itself.
+    // Pinning to ["websocket"] here would mask a broken polling route and
+    // locks out clients on networks that block raw WS.
     const s = io(socketUrl, {
       withCredentials: true,
-      transports: ["websocket"],
     });
 
     s.on("connect", () => setConnected(true));

@@ -93,7 +93,9 @@ export async function deleteExpenseController(
   try {
     const userId = requireUserId(req);
     await expenseService.deleteExpense(userId, req.params.id);
-    res.status(200).json({ success: true, message: "Expense deleted successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Expense deleted successfully" });
   } catch (err) {
     next(err);
   }

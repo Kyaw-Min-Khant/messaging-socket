@@ -1,7 +1,12 @@
 import { ValidationError } from "@app/shared-errors";
 import { CreateExpenseBody, PaymentMethod, UpdateExpenseBody } from "../types";
 
-const VALID_PAYMENT_METHODS: PaymentMethod[] = ["CASH", "KBZ_PAY", "AYA_PAY", "ONLINE_PAYMENT"];
+const VALID_PAYMENT_METHODS: PaymentMethod[] = [
+  "CASH",
+  "KBZ_PAY",
+  "AYA_PAY",
+  "ONLINE_PAYMENT",
+];
 
 function assertValidPaymentMethod(value: unknown): PaymentMethod {
   if (value === undefined || value === null) return "CASH";

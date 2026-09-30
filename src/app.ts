@@ -16,13 +16,44 @@ import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import { errorHandler } from "./middleware/error_middleware";
 import { getAllowedOrigins, isOriginAllowed } from "./config/cors";
+import mongoose from "mongoose";
+import { redisClient } from "./config/redis";
+import { createInternalOnly } from "./middleware/internal_auth";
 dotenv.config();
 
 const app = express();
 
+// Behind the gateway (and Render's edge), req.ip is the proxy's address
+// unless we trust one hop. Without this every client shares a single
+// rate-limit bucket, and express-rate-limit v7 rejects the X-Forwarded-For
+// the gateway sets via xfwd. A hop count rather than `true` — `true` would
+// let clients spoof the header outright.
+app.set("trust proxy", 1);
+
 // Security middleware
 app.use(helmet());
 app.use(compression());
+
+// Health check is registered before the rate limiter and before the internal
+// guard: probes all arrive from one IP (the gateway / Render), so behind the
+// limiter a traffic spike would 429 them and read as "unhealthy".
+app.get("/v1/api/health", async (_req, res) => {
+  const mongoOk = mongoose.connection.readyState === 1;
+  let redisOk = false;
+  try {
+    redisOk = redisClient.isOpen && (await redisClient.ping()) === "PONG";
+  } catch {
+    redisOk = false;
+  }
+
+  const healthy = mongoOk && redisOk;
+  res.status(healthy ? 200 : 503).json({
+    success: healthy,
+    message: healthy ? "Server is running" : "Server is degraded",
+    dependencies: { mongo: mongoOk, redis: redisOk },
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Rate limiting — general API
 const limiter = rateLimit({
@@ -84,6 +115,18 @@ if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 } else {
   app.use(morgan("combined"));
+}
+
+// Only the gateway may reach the application routes. Health is exempt above
+// (registered before this line), so Render's probe still works.
+const internalSecret = process.env.INTERNAL_SECRET;
+if (internalSecret) {
+  app.use("/v1/api", createInternalOnly(internalSecret));
+} else {
+  console.warn(
+    "⚠️ INTERNAL_SECRET is not set — this service accepts direct public " +
+      "traffic, bypassing the gateway. Set it in every environment but local.",
+  );
 }
 
 // Routes

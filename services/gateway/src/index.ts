@@ -4,10 +4,12 @@ dotenv.config();
 import { createServer } from "http";
 import app from "./app";
 import { socketProxy } from "./proxies";
+import { registerShutdown } from "@app/shared-config";
 
+// Log but do not exit: one rejected promise should not drop every in-flight
+// proxied response and every live socket.
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
-  process.exit(1);
 });
 process.on("uncaughtException", (err) => {
   console.error("Uncaught exception:", err);
@@ -35,3 +37,5 @@ server.listen(PORT, () => {
   console.log(`🚪 Gateway listening on port ${PORT}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
 });
+
+registerShutdown(server, [], { name: "gateway" });

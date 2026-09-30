@@ -116,7 +116,8 @@ export async function updateExpense(
   if (validated.categoryId !== undefined)
     data.categoryId = validated.categoryId as string;
   if (validated.paymentMethod !== undefined)
-    data.paymentMethod = validated.paymentMethod as Prisma.ExpenseUncheckedUpdateManyInput["paymentMethod"];
+    data.paymentMethod =
+      validated.paymentMethod as Prisma.ExpenseUncheckedUpdateManyInput["paymentMethod"];
   if (validated.description !== undefined)
     data.description = validated.description as string | null;
   if (validated.spentAt !== undefined)

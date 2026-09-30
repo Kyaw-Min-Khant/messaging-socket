@@ -1,26 +1,18 @@
-# Render Blueprint — deploys the new microservices world alongside the
-# still-live monolith (which is NOT part of this blueprint; it keeps running
-# wherever it already runs today). Deploy with: Render Dashboard -> New ->
-# Blueprint -> point at this repo.
-#
-# Only gateway + expense-service exist so far. When auth-service/user-service/
-# messaging-service are extracted later, add one `type: web` entry per service
-# here (same shape as expense-service below), each referencing the same
-# `shared-secrets` env var group so JWT_SECRET stays identical everywhere.
-
 envVarGroups:
   - name: shared-secrets
     envVars:
-      # Must be byte-identical to whatever JWT_SECRET the existing monolith
-      # already signs cookies with — set manually in the Render dashboard,
-      # never committed here. Rotating it logs out every current user.
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRES_IN
         value: 15d
+      # Lets the backends reject traffic that did not come through the gateway.
+      # Needed because private services (type: pserv) are not on the free plan,
+      # so monolith and expense-service each have a public URL.
+      - key: INTERNAL_SECRET
+        generateValue: true
 
 services:
-  # Public entry point — the only service with a public URL.
+  # ── Gateway — the only service with a public URL ───────────────────────────
   - type: web
     name: gateway
     env: docker
@@ -32,22 +24,67 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Your production client origin(s), comma-separated — used for CORS.
+      - fromGroup: shared-secrets
       - key: CLIENT_URL
         sync: false
-      # Internal address of expense-service, resolved automatically by Render
-      # at deploy time via its private networking (no public URL needed).
+      # Backend addresses. NOTE: these are type: web, so they DO have public
+      # URLs (pserv is not on the free plan) — INTERNAL_SECRET is what keeps
+      # them gateway-only. hostport yields host:port with no scheme; the
+      # gateway prepends http:// (see services/gateway/src/proxies.ts).
+      - key: MONOLITH_URL
+        fromService:
+          type: web
+          name: monolith
+          property: hostport
       - key: EXPENSE_SERVICE_URL
         fromService:
           type: web
           name: expense-service
           property: hostport
-      # The still-live monolith's existing public URL (auth/users/messaging
-      # traffic still goes straight there until each feature is extracted).
-      - key: MONOLITH_URL
-        sync: false
 
-  # New, fully independent feature — PostgreSQL (Neon) via Prisma.
+  # ── Monolith — auth, messaging, users (public URL, gateway-only via secret) ─
+  - type: web
+    name: monolith
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    healthCheckPath: /v1/api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: shared-secrets
+      # Set these manually in the Render dashboard
+      - key: MONGODB_URI
+        sync: false
+      # src/config/redis.ts reads host, port AND password separately — Redis
+      # Cloud uses a non-default port and requires auth, so all three are
+      # required. Without them the client silently falls back to :6379 with no
+      # password and /v1/api/health reports redis:false.
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      # All five are read by src/config/firebase.ts.
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY_ID
+        sync: false
+      - key: FIREBASE_CLIENT_ID
+        sync: false
+      - key: APP_NAME
+        value: Messaging App
+
+  # ── Expense service (public URL, gateway-only via INTERNAL_SECRET) ────────
   - type: web
     name: expense-service
     env: docker
@@ -60,11 +97,7 @@ services:
       - key: NODE_ENV
         value: production
       - fromGroup: shared-secrets
-      # Neon (or any Postgres) connection string — paste in the Render
-      # dashboard, not committed here.
-      - key: DATABASE_URL
-        sync: false
-      # Only relevant for this service's own standalone CORS/Swagger use
-      # before the gateway centralizes CORS — safe to leave unset.
       - key: CLIENT_URL
+        sync: false
+      - key: DATABASE_URL
         sync: false
