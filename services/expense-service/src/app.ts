@@ -4,7 +4,6 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
-import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
@@ -19,16 +18,14 @@ dotenv.config();
 
 const app = express();
 
-// Behind the gateway (and Render's edge) req.ip is the proxy's address unless
-// we trust one hop; without it every client shares one rate-limit bucket and
-// express-rate-limit v7 rejects the gateway's X-Forwarded-For.
+// Behind the gateway, req.protocol/req.secure would otherwise report the
+// internal http hop rather than the client's https.
 app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(compression());
 
-// Registered before the rate limiter and the internal guard so Render's probe
-// is never throttled or rejected.
+// Registered before the internal guard so Render can probe it directly.
 app.get("/v1/api/health", async (_req, res) => {
   let dbOk = false;
   try {
@@ -46,12 +43,9 @@ app.get("/v1/api/health", async (_req, res) => {
   });
 });
 
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 100,
-  message: "Too many requests from this IP, please try again later.",
-});
-app.use("/v1/api", limiter);
+// Rate limiting lives in the gateway, not here — see the note in src/app.ts
+// of the monolith. Behind the gateway req.ip is the hop address, so a per-IP
+// limit at this layer is a single global bucket.
 
 const options = {
   definition: {
