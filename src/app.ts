@@ -3,7 +3,6 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
-import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import routes from "./routes";
@@ -23,20 +22,18 @@ dotenv.config();
 
 const app = express();
 
-// Behind the gateway (and Render's edge), req.ip is the proxy's address
-// unless we trust one hop. Without this every client shares a single
-// rate-limit bucket, and express-rate-limit v7 rejects the X-Forwarded-For
-// the gateway sets via xfwd. A hop count rather than `true` — `true` would
-// let clients spoof the header outright.
+// Behind the gateway, req.protocol/req.secure would otherwise report the
+// internal http hop rather than the client's https. A hop count rather than
+// `true` — `true` would let clients spoof X-Forwarded-* outright.
 app.set("trust proxy", 1);
 
 // Security middleware
 app.use(helmet());
 app.use(compression());
 
-// Health check is registered before the rate limiter and before the internal
-// guard: probes all arrive from one IP (the gateway / Render), so behind the
-// limiter a traffic spike would 429 them and read as "unhealthy".
+// Health check is registered before the internal guard so Render can probe it
+// directly — the guard would otherwise 403 every health check and fail the
+// deploy.
 app.get("/v1/api/health", async (_req, res) => {
   const mongoOk = mongoose.connection.readyState === 1;
   let redisOk = false;
@@ -55,23 +52,12 @@ app.get("/v1/api/health", async (_req, res) => {
   });
 });
 
-// Rate limiting — general API
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 100,
-  message: "Too many requests from this IP, please try again later.",
-});
-app.use("/v1/api", limiter);
-
-// Stricter limiter for auth endpoints to prevent brute force
-const authLimiter = rateLimit({
-  windowMs: 30 * 60 * 1000,
-  max: 50,
-  message: "Too many auth attempts, please try again later.",
-});
-
-app.use("/v1/api/auth/login", authLimiter);
-app.use("/v1/api/auth/register", authLimiter);
+// Rate limiting lives in the gateway, not here. All traffic reaches this
+// service through the gateway (see the internal-secret guard below), so a
+// second limiter could never fire first on legitimate traffic — and it would
+// fire wrongly: behind two proxy hops req.ip resolves to the hop address, not
+// the client, so a per-IP limit here is really a single global bucket that
+// locks out every user at once.
 
 const options = {
   definition: {
