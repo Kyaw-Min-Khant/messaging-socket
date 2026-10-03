@@ -1,559 +1,306 @@
 # Messaging Platform
 
-A real-time messaging backend (Node.js, Express, TypeScript, Socket.IO, MongoDB) with JWT-cookie auth, friends/direct messaging, Firebase push notifications, and a standalone **Daily Expense Tracker** microservice (PostgreSQL + Prisma).
+Real-time messaging (friends, DMs, Socket.IO, FCM) plus a daily expense tracker. One public origin — the **gateway** — fronts the monolith (auth, users, chat) and expense-service (Postgres). The React client never talks to a backend directly.
 
 ---
 
-## Table of Contents
+## Table of contents
 
-1. [System Topology](#system-topology)
-2. [Repository Layout](#repository-layout)
-3. [Backend Processing — Full Detail](#backend-processing--full-detail)
-   - [Startup sequence](#startup-sequence)
-   - [Middleware stack](#middleware-stack)
-   - [Auth flow](#auth-flow-post-v1apiauthlogi)
-   - [Protected REST request flow](#protected-rest-request-flow)
-   - [Expense proxy flow](#expense-proxy-flow)
-   - [Socket.IO real-time flow](#socketio-real-time-flow)
-4. [API Routes](#api-routes)
-5. [Data Models](#data-models)
-6. [Environment Variables](#environment-variables)
-7. [Getting Started](#getting-started)
+1. [System topology](#system-topology)
+2. [Request flow](#request-flow)
+3. [Repository layout](#repository-layout)
+4. [Expense-service API](#expense-service-api)
+5. [Data stores](#data-stores)
+6. [Getting started](#getting-started)
+7. [Environment](#environment)
 8. [Deployment](#deployment)
 
 ---
 
-## System Topology
+## System topology
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│  Client  (Vercel)                                              │
-│  React 18 · Vite 5 · TypeScript                               │
-│  axios + socket.io-client                                      │
-│  VITE_API_URL = https://messaging-socket.onrender.com/v1/api  │
-└───────────────────────┬────────────────────────────────────────┘
-                        │  HTTP (REST) + WebSocket (Socket.IO)
-                        ▼
-┌────────────────────────────────────────────────────────────────┐
-│  Monolith  (Render · messaging-socket.onrender.com)            │
-│  Express + Socket.IO · Node.js 20 · TypeScript                │
-│                                                                │
-│  /v1/api/auth/**         → auth controller                    │
-│  /v1/api/users/**        → user controller                    │
-│  /v1/api/conversations/** → message controller                │
-│  /v1/api/expenses/**     → ── proxy ──────────────────────┐   │
-│  ws://                   → Socket.IO handlers             │   │
-│                                                           │   │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐    │   │
-│  │  MongoDB    │  │    Redis     │  │   Firebase   │    │   │
-│  │  Atlas      │  │  Redis Cloud │  │   FCM (push) │    │   │
-│  │  users      │  │  user cache  │  └──────────────┘    │   │
-│  │  messages   │  │  presence    │                       │   │
-│  │  convos     │  │  socketIds   │                       │   │
-│  └─────────────┘  └──────────────┘                       │   │
-└───────────────────────────────────────────────────────────┼───┘
-                                                            │  HTTP proxy (http-proxy-middleware)
-                                                            ▼
-┌────────────────────────────────────────────────────────────────┐
-│  Expense Service  (Render · expense-service-8i5i.onrender.com) │
-│  Express · Prisma ORM · TypeScript                             │
-│                                                                │
-│  /v1/api/expenses/categories                                   │
-│  /v1/api/expenses/summary                                      │
-│  /v1/api/expenses  (CRUD)                                      │
-│                                                                │
-│  ┌──────────────────────────────────┐                         │
-│  │  PostgreSQL / Neon               │                         │
-│  │  expenses · expense_categories   │                         │
-│  └──────────────────────────────────┘                         │
-└────────────────────────────────────────────────────────────────┘
+Browser  (Vite :3000 / Vercel)
+   │  REST  /v1/api/*     +     WebSocket  /socket.io
+   ▼
+Gateway  (:4000)                         ← only public origin
+   │  stamps x-internal-secret
+   │  rate-limits /v1/api and /auth/login|register
+   │
+   ├── /v1/api/expenses/**  →  Expense service (:4004)  →  PostgreSQL
+   ├── /v1/api/**           →  Monolith (:1500)         →  MongoDB + Redis + FCM
+   └── /socket.io           →  Monolith Socket.IO
 ```
 
-One `VITE_API_URL` in the client. The monolith is the single entry point — it proxies expense requests internally.
+`INTERNAL_SECRET` is what makes the gateway a trust boundary. Monolith and expense-service are public URLs on Render (private services are not on the free plan), so they reject any request that is missing that header with `403 {"success":false,"error":"Forbidden."}`.
+
+Locally, Vite proxies `/v1/api` and `/socket.io` to the gateway (`VITE_API_PROXY_TARGET=http://localhost:4000`). In production the client sets `VITE_API_URL` to the gateway’s `/v1/api`.
 
 ---
 
-## Repository Layout
+## Request flow
+
+### Login
 
 ```
-src/                          # Monolith — auth, users, messaging, Socket.IO
-  app.ts                      # Express app (middleware + proxy + routes)
-  index.ts                    # HTTP server + Socket.IO server + startup
-  controllers/
-    auth_controller.ts
-    users_controller.ts
-    message_controller.ts
-  middleware/
-    auth.ts                   # JWT cookie → Redis → MongoDB user hydration
-    error_middleware.ts
-  models/                     # Mongoose schemas (User, Message, Conversation, Friend, Room)
-  routes/                     # auth, user_route, message_route, index
-  services/                   # auth_service, user_service, message_service, fcm_service
-  socket/
-    index.ts                  # Socket.IO event handlers
-  config/                     # cors, database, firebase, redis
+POST /v1/api/auth/login  { email, password }
+        │
+        ▼
+Gateway  authLimiter (10 / 15 min) → proxy + x-internal-secret
+        │
+        ▼
+Monolith  auth_service
+   1. User.findOne({ email })          MongoDB
+   2. bcrypt.compare
+   3. jwt.sign({ userId, username, email }, JWT_SECRET, 15d)
+   4. Set-Cookie: token=…; HttpOnly
+        │
+        ▼
+Browser stores the cookie. Later REST + Socket.IO send it automatically.
+```
+
+Local HTTP uses `SameSite=Lax`. Deployed (`NODE_ENV=production` or `golive`) uses `Secure; SameSite=None; Partitioned` because the web app and API are different sites.
+
+### Authenticated REST (chat / users)
+
+```
+GET /v1/api/users   Cookie: token=<jwt>
+        │
+        ▼
+Gateway → monolith
+        │
+        ▼
+auth middleware
+   jwt.verify → Redis GET user:{id} (60s) → else MongoDB → SETEX
+   req.user = hydrated user
+        │
+        ▼
+controller → JSON
+```
+
+### Expense REST
+
+```
+GET /v1/api/expenses/categories   Cookie: token=<jwt>
+        │
+        ▼
+Gateway  matches /v1/api/expenses → expense-service + x-internal-secret
+        │
+        ▼
+expense-service
+   internal-secret guard
+   cookieParser
+   shared-auth jwt.verify   (no user DB — claims become req.user)
+        │
+        ▼
+controller → Prisma → PostgreSQL
+```
+
+Both services share `JWT_SECRET`. Expense-service never calls the monolith to resolve a user.
+
+### Socket.IO
+
+```
+io('/', { withCredentials: true })
+        │
+        ▼
+Gateway /socket.io  (HTTP poll, then WS upgrade — both stamped)
+        │
+        ▼
+Monolith handshake
+   cookie token or handshake.auth.token → jwt.verify
+   Redis HSET connectedUsers / userSockets
+   MongoDB isOnline = true
+        │
+        ├── sendDirectMessage → persist → emit or FCM if offline
+        ├── typing / markAsRead
+        └── disconnect → clear Redis + lastSeen
+```
+
+---
+
+## Repository layout
+
+```
+src/                          Monolith — auth, users, conversations, Socket.IO
+  app.ts                      Express app + internal-secret guard
+  index.ts                    HTTP + Socket.IO, env check, graceful shutdown
+  controllers/                auth, users, messages
+  middleware/                 JWT+Redis auth, internal_auth, errors
+  models/                     Mongoose: User, Message, Conversation, Friend
+  routes/                     /auth, /users, /conversations
+  services/                   auth, users, messages, FCM
+  socket/                     real-time handlers
+  config/                     cors, mongo, redis, firebase, validateEnv
 
 services/
-  expense-service/
-    prisma/
-      schema.prisma           # Expense, ExpenseCategory, PaymentMethod enum
-      seed.ts                 # seeds 11 categories
-      migrations/
-    src/
-      app.ts
-      controllers/expense_controller.ts
-      middleware/auth.ts      # shared-auth (JWT verify only, no DB lookup)
-      services/expense_service.ts
-      validators/expense_validator.ts
-      utils/serializeExpense.ts
-  gateway/                    # standalone gateway (not used in current prod deploy)
+  gateway/                    Public entry — CORS, rate limit, proxies
+    src/app.ts
+    src/proxies.ts            expense → :4004, everything else + WS → :1500
+  expense-service/            Expense tracker (Express + Prisma)
+    prisma/schema.prisma
+    prisma/seed.ts
+    src/app.ts                health, Swagger, internal-secret, routes
+    src/docs/openapi.ts       OpenAPI 3 spec
+    src/controllers/          expense, category, budget, income, recurring, report
+    src/services/
+    src/routes/               mounted under /v1/api/expenses/*
 
 packages/
-  shared-auth/                # JWT verification + Express middleware factory
-  shared-errors/
-  shared-config/
+  shared-auth/                JWT verify + Express / Socket helpers
+  shared-config/              CORS, shutdown
+  shared-errors/              typed HTTP errors
 
-client/                       # Vite + React frontend
-  src/
-    api/
-      client.ts               # single axios instance (VITE_API_URL)
-      expenses.ts             # all expense API calls via the same client
-    pages/Expenses.tsx
-    types/index.ts
-
-render.yaml                   # Render Blueprint (monolith + expense-service)
-docker-compose.yaml
+client/                       Vite + React (not an npm workspace)
+  src/api/                    axios client (cookie credentials)
+  src/pages/                  Login, Register, Chat, Profile, Expenses
+  src/components/expenses/    Budgets, Income, Recurring, Reports, categories
 ```
+
+Workspaces are `services/*` and `packages/*` only. The web app is started with `cd client && npm run dev`.
 
 ---
 
-## Backend Processing — Full Detail
+## Expense-service API
 
-### Startup sequence
+Interactive docs (no auth required to *view*):
 
-`src/index.ts` runs these steps before accepting any connection:
+| | URL |
+|---|---|
+| Swagger UI | http://localhost:4004/api-docs |
+| OpenAPI JSON | http://localhost:4004/api-docs.json |
+| Monolith Swagger | http://localhost:1500/api-docs |
 
-1. Check `JWT_SECRET` — exits with an error if missing (fail-fast, no silent misconfiguration)
-2. `connectDB()` — Mongoose connects to MongoDB Atlas
-3. `initializeFirebase()` — Firebase Admin SDK initialized with service account credentials
-4. `connectRedis()` — Redis client connects to Redis Cloud
-5. `createServer(app)` + `new Server(io)` — HTTP server and Socket.IO server share the same port
-6. `registerSocketHandlers(io)` — attach all Socket.IO event listeners
-7. `server.listen(PORT)` — start accepting requests
+In Swagger UI pick the **Local gateway** server, then **Authorize** with the JWT from the `token` cookie (`POST /v1/api/auth/login` on the gateway). Trying the expense-service host directly returns 403 when `INTERNAL_SECRET` is set.
 
-If any step throws, the process exits rather than silently serving partial functionality.
+| Method | Path | Auth | What it does |
+|--------|------|------|----------------|
+| GET | `/v1/api/health` | — | Postgres probe (unguarded) |
+| GET/POST | `/v1/api/expenses/categories` | ✓ | List / create categories |
+| PUT/DELETE | `/v1/api/expenses/categories/:id` | ✓ | Update / delete *custom* categories |
+| GET/POST | `/v1/api/expenses` | ✓ | List (filters: `startDate`, `endDate`, `category`, `page`, `limit`) / create |
+| GET/PUT/DELETE | `/v1/api/expenses/:id` | ✓ | One expense |
+| GET | `/v1/api/expenses/summary` | ✓ | Totals by `groupBy=day\|category` |
+| GET/POST | `/v1/api/expenses/budgets` | ✓ | Monthly limits (`categoryId` omitted = overall) |
+| GET | `/v1/api/expenses/budgets/status` | ✓ | Spent vs limit (`month=YYYY-MM`) |
+| PUT/DELETE | `/v1/api/expenses/budgets/:id` | ✓ | Update amount / delete |
+| GET/POST | `/v1/api/expenses/income` | ✓ | List / record income |
+| GET/PUT/DELETE | `/v1/api/expenses/income/:id` | ✓ | One income row |
+| GET/POST | `/v1/api/expenses/recurring` | ✓ | List / create rules (back-fills due occurrences) |
+| GET/PUT/DELETE | `/v1/api/expenses/recurring/:id` | ✓ | One rule (delete keeps generated expenses) |
+| POST | `/v1/api/expenses/recurring/:id/pause` | ✓ | Pause (no back-fill on resume) |
+| POST | `/v1/api/expenses/recurring/:id/resume` | ✓ | Resume |
+| GET | `/v1/api/expenses/reports/monthly` | ✓ | Income, expense, net, breakdowns |
+| GET | `/v1/api/expenses/reports/export` | ✓ | CSV (`type=expense\|income`, `from`, `to`) |
 
----
+Creating or updating an expense may include `budgetWarnings` when a touched budget is at least 80% used.
 
-### Middleware stack
+### Monolith routes (also via the gateway)
 
-Middleware runs in registration order. The order matters:
-
-#### Monolith (`src/app.ts`)
-
-| Order | Middleware | Purpose |
-|-------|-----------|---------|
-| 1 | `helmet()` | Sets security HTTP headers (X-Frame-Options, CSP, etc.) |
-| 2 | `compression()` | Gzip response bodies |
-| 3 | `rateLimit()` | 100 requests/min per IP on all `/v1/api` routes |
-| 4 | `authLimiter()` | Stricter: 50 requests/30 min per IP on `/auth/login` and `/auth/register` |
-| 5 | `cors()` | Allows configured origins with `credentials: true` |
-| 6 | `cookieParser()` | Parses the `token` httpOnly cookie from the request |
-| 7 | `express.json()` | Parses request body as JSON (1 MB limit) |
-| **8** | **`createProxyMiddleware()`** | **Intercepts `/v1/api/expenses/**` — forwards to expense-service** |
-| 9 | `morgan()` | HTTP request logging (`dev` in development, `combined` in production) |
-| 10 | `routes` | All monolith routes (`/auth`, `/users`, `/conversations`, `/health`) |
-| 11 | `errorHandler` | Catches errors thrown by controllers |
-| 12 | 404 handler | Returns HTML or JSON depending on `Accept` header |
-
-#### Expense Service (`services/expense-service/src/app.ts`)
-
-| Order | Middleware | Purpose |
-|-------|-----------|---------|
-| 1 | `helmet()` | Security headers |
-| 2 | `cors()` | Same origin policy, credentials: true |
-| 3 | `cookieParser()` | Reads cookie forwarded by the proxy |
-| 4 | `express.json()` | Parse body |
-| 5 | `morgan()` | Request logging |
-| 6 | `auth` (per-route) | JWT verify from `shared-auth` package — no DB lookup, claims trusted from token |
-| 7 | Controller | Validate → service → Prisma → PostgreSQL |
-| 8 | `errorHandler` | Prisma errors mapped to HTTP status codes |
-
----
-
-### Auth flow (`POST /v1/api/auth/login`)
-
-```
-Client
-  │
-  │  POST /v1/api/auth/login  { email, password }
-  ▼
-authLimiter  ──  > 50 req/30min from this IP?  ──▶  429 Too Many Requests
-  │
-  ▼
-auth_controller.ts → auth_service.ts
-  │  1. User.findOne({ email })  →  MongoDB
-  │  2. bcrypt.compare(password, user.password)
-  │  3. jwt.sign({ userId, username, email }, JWT_SECRET, { expiresIn: '15d' })
-  ▼
-res.cookie('token', jwt, {
-  httpOnly: true,       // JS cannot read it — XSS protection
-  secure: true,         // HTTPS only
-  sameSite: 'none',     // required: client (Vercel) and API (Render) are cross-origin
-  maxAge: 15 days
-})
-  │
-  ▼
-Client browser stores cookie automatically.
-All subsequent requests attach it automatically.
-```
-
-**Why `SameSite=None`?**
-The client is on `vercel.app` and the API is on `onrender.com`. Browsers block `SameSite=Lax` cookies on cross-origin requests (XHR/fetch). `None; Secure` is the only value that allows them — and it requires HTTPS.
+| Method | Path | Auth | |
+|--------|------|------|--|
+| POST | `/v1/api/auth/register` | — | Create account |
+| POST | `/v1/api/auth/login` | — | Sets `token` cookie |
+| POST | `/v1/api/auth/logout` | ✓ | Clears cookie |
+| GET | `/v1/api/auth/user` | ✓ | Current user |
+| PUT | `/v1/api/auth/fcmtoken` | ✓ | FCM token |
+| GET | `/v1/api/users` | ✓ | Discoverable users |
+| GET | `/v1/api/users/friends` | ✓ | Friends |
+| GET | `/v1/api/users/friendrequest` | ✓ | Pending requests |
+| POST | `/v1/api/users/addfriend` | ✓ | Send request |
+| PUT | `/v1/api/users/confirm_request` | ✓ | Accept |
+| PUT | `/v1/api/users/avatar` | ✓ | Avatar |
+| GET | `/v1/api/conversations/:friend_id/messages` | ✓ | History |
+| GET | `/v1/api/health` | — | Mongo + Redis |
+| GET | `/health` | — | Gateway liveness |
+| GET | `/health/ready` | — | Gateway + both upstreams |
 
 ---
 
-### Protected REST request flow
+## Data stores
 
-Example: `GET /v1/api/users`
+**MongoDB (monolith)** — `User`, `Message`, `Conversation` (2 participants), `Friend` (`pending` / `accepted` / `rejected`).
 
-```
-Client
-  │
-  │  GET /v1/api/users  (cookie: token=<jwt>)
-  ▼
-rateLimit  ──  check IP
-  │
-  ▼
-cors  ──  check Origin header against allowed list
-  │
-  ▼
-cookieParser  ──  extracts token from Cookie header
-  │
-  ▼
-auth middleware (src/middleware/auth.ts)
-  │
-  │  1. Read req.cookies.token
-  │  2. jwt.verify(token, JWT_SECRET)  ──  invalid/expired?  ──▶  401
-  │  3. Redis GET user:{userId}
-  │       hit?  ──▶  use cached user (TTL 60s)
-  │       miss? ──▶  MongoDB.findById(userId).select('-password')
-  │                  ──▶  Redis SETEX user:{userId} 60 <json>
-  │  4. req.user = user
-  ▼
-users_controller.ts
-  │  queries MongoDB, transforms data
-  ▼
-res.json({ success: true, data: [...] })
-```
+**PostgreSQL (expense-service)**
 
-The Redis cache avoids a MongoDB round trip on every request for any user who has been active in the last 60 seconds.
+| Model | Notes |
+|-------|--------|
+| `ExpenseCategory` | `userId` null = global seed; otherwise owned |
+| `Expense` | `userId` from JWT (no FK). Indexes `(userId, spentAt)`, `(userId, categoryId)` |
+| `Budget` | Unique `(userId, categoryId)`; null category = overall cap |
+| `Income` | Indexed `(userId, receivedAt)` |
+| `RecurringExpense` | `DAILY` / `WEEKLY` / `MONTHLY` / `YEARLY`; generates `Expense` rows |
+
+Amounts are `Decimal(12,2)`, serialized as `"5000.00"`. Payment methods: `CASH`, `KBZ_PAY`, `AYA_PAY`, `ONLINE_PAYMENT`.
+
+**Redis (monolith)** — `user:{id}` (60s profile cache), `connectedUsers` and `userSockets` hashes for presence.
 
 ---
 
-### Expense proxy flow
+## Getting started
 
-Example: `GET /v1/api/expenses/categories`
-
-```
-Client
-  │
-  │  GET /v1/api/expenses/categories  (cookie: token=<jwt>)
-  ▼
-Monolith app.ts — proxy middleware matches /v1/api/expenses
-  │
-  │  Express strips the mount path → remaining path = /categories
-  │  pathRewrite: { '^/': '/v1/api/expenses/' }
-  │  rewrites /categories  →  /v1/api/expenses/categories
-  │
-  │  Forwards to:  https://expense-service-8i5i.onrender.com/v1/api/expenses/categories
-  │  - All original headers forwarded (including Cookie, Accept, etc.)
-  │  - changeOrigin: true  (rewrites Host header to match target)
-  │  - xfwd: true  (adds X-Forwarded-For, X-Forwarded-Host headers)
-  ▼
-Expense Service
-  │
-  │  cookieParser  ──  reads forwarded token cookie
-  │
-  │  auth middleware (from shared-auth package)
-  │    jwt.verify(token, JWT_SECRET)
-  │    req.user = { userId, email, username }  ← from token claims directly
-  │    (no MongoDB or Redis — expense-service has no user store)
-  │
-  ▼
-expense_controller.ts → expense_service.ts
-  │  prisma.expenseCategory.findMany()
-  ▼
-Expense Service sends JSON response
-  │
-  ▼
-Proxy streams response back to client
-  │
-  ▼
-Client receives:  { success: true, data: [{ id, name, description }, ...] }
-```
-
-**Key point:** The cookie is forwarded untouched by the proxy. Both services share the same `JWT_SECRET`, so the expense-service can verify the token independently without contacting the monolith.
-
----
-
-### Socket.IO real-time flow
-
-```
-Client
-  │
-  │  WebSocket upgrade  (cookie: token=<jwt>)
-  ▼
-Socket.IO handshake guard  (io.use())
-  │  Reads token from:
-  │    1. Cookie header  (cookie: token=xxx)
-  │    2. handshake.auth.token  (fallback for non-browser clients)
-  │  jwt.verify(token, JWT_SECRET)
-  │       invalid?  ──▶  connection rejected with Error('Invalid token')
-  │  socket.data.userId = decoded.userId
-  │  socket.data.username = decoded.username
-  ▼
-io.on('connection')
-  │
-  │  Register presence in Redis:
-  │    HSET connectedUsers  <socketId>  { id, username, userId, socketId, isOnline }
-  │    HSET userSockets     <userId>    <socketId>
-  │  Update MongoDB:
-  │    User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: now })
-  │
-  ├── Event: sendDirectMessage  { recipientId, message, messageType? }
-  │     │
-  │     │  1. Find or create Conversation where participants includes [senderId, recipientId]
-  │     │  2. Message.create({ conversation, sender, content, messageType })
-  │     │  3. Conversation.updateOne({ lastMessage, updatedAt })
-  │     │  4. Redis HGET userSockets <recipientId>  →  get recipient's socketId
-  │     │     if online  →  io.to(socketId).emit('newDirectMessage', message)
-  │     │     if offline →  fcm_service.sendPushNotification(recipientFcmToken, data)
-  │     │  5. socket.emit('messageSent', message)  ← confirm to sender
-  │
-  ├── Event: typing  →  broadcast typing indicator to conversation participants
-  │
-  ├── Event: markAsRead  →  Message.updateMany({ readBy: push userId })
-  │
-  └── disconnect
-        Redis HDEL connectedUsers <socketId>
-        Redis HDEL userSockets <userId>
-        User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: now })
-        socket.broadcast.emit('userOffline', { userId })
-```
-
----
-
-## API Routes
-
-### Monolith — `https://messaging-socket.onrender.com/v1/api`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/auth/register` | — | Create account |
-| POST | `/auth/login` | — | Login, sets cookie |
-| POST | `/auth/logout` | ✓ | Clears cookie |
-| GET | `/auth/user` | ✓ | Current user profile |
-| PUT | `/auth/fcmtoken` | ✓ | Update FCM push token |
-| GET | `/users` | ✓ | List all users |
-| GET | `/users/friends` | ✓ | Friend list |
-| GET | `/users/friendrequest` | ✓ | Pending requests |
-| POST | `/users/addfriend` | ✓ | Send friend request |
-| PUT | `/users/confirm_request` | ✓ | Accept friend request |
-| PUT | `/users/avatar` | ✓ | Upload avatar |
-| GET | `/conversations/:friend_id/messages` | ✓ | Message history |
-| GET | `/health` | — | Health check |
-
-### Expense Service — proxied via monolith at `/v1/api/expenses`
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/categories` | ✓ | All 11 expense categories |
-| GET | `/summary` | ✓ | Totals grouped by `day` or `category` |
-| POST | `/` | ✓ | Create expense |
-| GET | `/` | ✓ | List expenses (paginated, filterable) |
-| GET | `/:id` | ✓ | Get single expense |
-| PUT | `/:id` | ✓ | Update expense |
-| DELETE | `/:id` | ✓ | Delete expense |
-| GET | `/health` | — | Health check |
-
-**Query params for `GET /expenses`:** `startDate`, `endDate`, `category`, `page`, `limit`  
-**Query params for `GET /expenses/summary`:** `startDate`, `endDate`, `groupBy` (`day` | `category`)
-
----
-
-## Data Models
-
-### MongoDB (Monolith)
-
-**User**
-```
-_id         ObjectId    PK
-username    String      unique
-email       String      unique
-password    String      bcrypt hash (never returned in responses)
-avatar      String?     URL
-isOnline    Boolean     updated on socket connect/disconnect
-lastSeen    Date
-fcmToken    String?     Firebase Cloud Messaging token for push notifications
-createdAt   Date
-```
-
-**Message**
-```
-_id           ObjectId    PK
-conversation  ObjectId    → Conversation
-sender        ObjectId    → User
-content       String
-messageType   String      "text" | "image" | "file"
-readBy        ObjectId[]  users who have read this message
-createdAt     Date
-```
-
-**Conversation**
-```
-_id           ObjectId    PK
-participants  ObjectId[]  exactly 2 users (direct message)
-lastMessage   ObjectId?   → Message
-updatedAt     Date        updated on each new message
-```
-
-**Friend**
-```
-_id       ObjectId    PK
-requester ObjectId    → User
-recipient ObjectId    → User
-status    String      "pending" | "accepted" | "rejected"
-```
-
-### PostgreSQL (Expense Service via Prisma)
-
-**ExpenseCategory**
-```
-id           UUID        PK
-name         String      unique  (FOOD | TRANSPORT | HOUSING | UTILITIES |
-                                  HEALTHCARE | ENTERTAINMENT | SHOPPING |
-                                  EDUCATION | TRAVEL | SAVINGS | OTHER)
-description  String?
-```
-
-**Expense**
-```
-id             UUID         PK
-userId         String       from JWT claim (no FK to a user table)
-amount         Decimal(12,2)
-currency       Char(3)      default "MMK"
-categoryId     UUID         → ExpenseCategory
-paymentMethod  Enum         CASH | KBZ_PAY | AYA_PAY | ONLINE_PAYMENT  (default CASH)
-description    String?      max 500 chars
-spentAt        Date         date of the expense (not timestamp)
-createdAt      DateTime     auto
-updatedAt      DateTime     auto-updated
-
-Indexes:
-  (userId, spentAt)    — for date-range queries
-  (userId, categoryId) — for category filter queries
-```
-
-### Redis (In-memory)
-
-| Key | Type | Value | TTL |
-|-----|------|-------|-----|
-| `user:{userId}` | String | JSON user object | 60s |
-| `connectedUsers` | Hash | `socketId → userEntry JSON` | none |
-| `userSockets` | Hash | `userId → socketId` | none |
-
----
-
-## Environment Variables
-
-### Monolith (`.env`)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | no | Default `1500` |
-| `NODE_ENV` | yes | `development` / `golive` / `production` |
-| `JWT_SECRET` | **yes** | Must match across all services |
-| `JWT_EXPIRES_IN` | no | Default `15d` |
-| `MONGODB_URI` | **yes** | MongoDB Atlas connection string |
-| `REDIS_URL` | **yes** | Redis Cloud host |
-| `REDIS_PASSWORD` | **yes** | Redis password |
-| `REDIS_PORT` | **yes** | Redis port |
-| `CLIENT_URL` | **yes** | Allowed CORS origins (comma-separated) |
-| `EXPENSE_SERVICE_URL` | **yes** | Expense service base URL for proxy |
-| `FIREBASE_PROJECT_ID` | yes | Firebase project |
-| `FIREBASE_PRIVATE_KEY` | yes | Firebase service account key |
-| `FIREBASE_CLIENT_EMAIL` | yes | Firebase service account email |
-
-### Expense Service (`services/expense-service/.env`)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | no | Default `4004` |
-| `DATABASE_URL` | **yes** | PostgreSQL connection string (Neon) |
-| `JWT_SECRET` | **yes** | Must be identical to monolith |
-| `CLIENT_URL` | yes | Allowed CORS origins |
-
-> **Critical:** `JWT_SECRET` must be byte-identical in every service. The expense-service verifies tokens signed by the monolith — if the secrets differ, all expense requests return 401.
-
----
-
-## Getting Started
-
-### Monolith only
+Need four processes: monolith `:1500`, gateway `:4000`, expense-service `:4004`, client `:3000`.
 
 ```bash
+# root — monolith
+cp .env.example .env          # JWT_SECRET, INTERNAL_SECRET, Mongo, Redis, …
 npm install
-cp .env.example .env    # fill in MONGODB_URI, JWT_SECRET, REDIS_*, FIREBASE_*
-# add EXPENSE_SERVICE_URL=https://expense-service-8i5i.onrender.com (or local)
-npm run dev             # ts-node-dev on localhost:1500
-```
+npm run dev                   # :1500
 
-### With expense service locally
-
-```bash
-npm install
+# gateway + expense-service (from repo root)
+cp services/gateway/.env.example services/gateway/.env
 cp services/expense-service/.env.example services/expense-service/.env
-# set DATABASE_URL and JWT_SECRET (must match monolith)
-npm run dev -w services/expense-service   # localhost:4004
-npm run dev                               # localhost:1500 (with proxy to :4004)
-```
+# INTERNAL_SECRET and JWT_SECRET must match the monolith
+npm run dev:services          # gateway :4000 + expense :4004
 
-### Seed expense categories
-
-```bash
 cd services/expense-service
-npm run prisma:seed
+npm run prisma:migrate
+npm run prisma:seed           # default categories
+
+# client (not a workspace)
+cd client
+cp .env.example .env
+# VITE_API_PROXY_TARGET=http://localhost:4000
+# VITE_EXPENSE_API_PROXY_TARGET=http://localhost:4000
+npm install
+npm run dev                   # :3000
 ```
 
-### Full stack (Docker)
+Then open http://localhost:3000 and http://localhost:4004/api-docs.
+
+Docker (gateway on host port 80):
 
 ```bash
 docker compose up -d --build
 ```
 
+`client` is not in the compose file — still run Vite, and point the proxy at `http://localhost` (port 80) if you use that stack.
+
+---
+
+## Environment
+
+Shared across services:
+
+| Variable | Who | Notes |
+|----------|-----|--------|
+| `JWT_SECRET` | all backends | Must be identical |
+| `INTERNAL_SECRET` | gateway + monolith + expense | Must be identical. Leave empty on the monolith only if Vite talks to `:1500` directly |
+| `CLIENT_URL` | gateway (and backends for CORS) | Comma-separated origins |
+
+Monolith also needs `MONGODB_URI` (or `DEV_MONGODB_URI`), Redis (`REDIS_URL` / `DEV_REDIS_*`), and Firebase Admin keys in non-dev. Expense-service needs `DATABASE_URL`. Gateway needs `MONOLITH_URL` and `EXPENSE_SERVICE_URL`.
+
+Client: `VITE_API_PROXY_TARGET` / `VITE_EXPENSE_API_PROXY_TARGET` (local) or `VITE_API_URL` (production gateway). Firebase web keys for push.
+
 ---
 
 ## Deployment
 
-Production is Render.com. See `render.yaml` for the Blueprint config.
+`render.yaml` Blueprint: **gateway** (public), **monolith**, **expense-service**. Downstream URLs come from `fromService.hostport`; the gateway adds `http://`. Health: gateway `/health`, monolith `/v1/api/health`, expense `/v1/api/health`.
 
-**Monolith service (`messaging-socket`)**
-- Build: `npm install && npm run build`
-- Start: `npm start`
-- Required env vars: all variables listed above including `EXPENSE_SERVICE_URL`
+Expense-service start: `npx prisma migrate deploy && npm start`.
 
-**Expense service (`expense-service`)**
-- Build: `npm install && npx prisma generate && npm run build`
-- Start: `npx prisma migrate deploy && npm start`
-- Required env vars: `DATABASE_URL`, `JWT_SECRET`, `CLIENT_URL`
-
-After deploying, verify:
-```bash
-curl https://messaging-socket.onrender.com/v1/api/health
-curl https://expense-service-8i5i.onrender.com/v1/api/health
-curl https://messaging-socket.onrender.com/v1/api/expenses/categories  # should proxy correctly
-```
+The Vercel client should set `VITE_API_URL` to `https://<gateway>/v1/api` — never to the monolith or expense-service.
 
 ---
 

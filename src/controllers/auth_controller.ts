@@ -49,8 +49,7 @@ const MAX_AGE_SEC = 15 * 24 * 60 * 60;
 
 function setAuthCookie(res: Response, token: string): void {
   const isDeployed =
-    process.env.NODE_ENV === "production" ||
-    process.env.NODE_ENV === "golive";
+    process.env.NODE_ENV === "production" || process.env.NODE_ENV === "golive";
 
   if (isDeployed) {
     // SameSite=None; Partitioned (CHIPS) — required for cross-site cookies on
@@ -72,8 +71,7 @@ function setAuthCookie(res: Response, token: string): void {
 
 function clearAuthCookie(res: Response): void {
   const isDeployed =
-    process.env.NODE_ENV === "production" ||
-    process.env.NODE_ENV === "golive";
+    process.env.NODE_ENV === "production" || process.env.NODE_ENV === "golive";
 
   if (isDeployed) {
     res.setHeader(
@@ -107,6 +105,7 @@ export const login = async (
       message: "Login successful",
     });
   } catch (error) {
+    console.log(error, "Error");
     next(error);
   }
 };

@@ -1,14 +1,9 @@
 import { NextFunction, Request, Response } from "express";
-import { UnauthorizedError } from "@app/shared-errors";
 import * as expenseService from "../services/expense_service";
+import { listCategories } from "../services/category_service";
+import { getBudgetWarnings } from "../services/budget_service";
 import { serializeExpense } from "../utils/serializeExpense";
-
-function requireUserId(req: Request): string {
-  if (!req.user?.userId) {
-    throw new UnauthorizedError("User not authenticated");
-  }
-  return req.user.userId;
-}
+import { requireUserId } from "../utils/requireUserId";
 
 export async function createExpenseController(
   req: Request,
@@ -18,10 +13,16 @@ export async function createExpenseController(
   try {
     const userId = requireUserId(req);
     const expense = await expenseService.createExpense(userId, req.body);
+    const budgetWarnings = await getBudgetWarnings(
+      userId,
+      expense.categoryId,
+      expense.spentAt,
+    );
     res.status(201).json({
       success: true,
       message: "Expense created successfully",
       data: serializeExpense(expense),
+      budgetWarnings,
     });
   } catch (err) {
     next(err);
@@ -75,10 +76,16 @@ export async function updateExpenseController(
       req.params.id,
       req.body,
     );
+    const budgetWarnings = await getBudgetWarnings(
+      userId,
+      expense.categoryId,
+      expense.spentAt,
+    );
     res.status(200).json({
       success: true,
       message: "Expense updated successfully",
       data: serializeExpense(expense),
+      budgetWarnings,
     });
   } catch (err) {
     next(err);
@@ -119,12 +126,13 @@ export async function getSummaryController(
 }
 
 export async function listCategoriesController(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const categories = await expenseService.listCategories();
+    const userId = requireUserId(req);
+    const categories = await listCategories(userId);
     res.status(200).json({ success: true, data: categories });
   } catch (err) {
     next(err);

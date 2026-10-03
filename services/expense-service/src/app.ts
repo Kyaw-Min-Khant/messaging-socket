@@ -1,4 +1,3 @@
-import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -7,12 +6,12 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
-import swaggerJsdoc from "swagger-jsdoc";
 import routes from "./routes";
 import { errorHandler } from "./middleware/error_middleware";
 import { getAllowedOrigins, isOriginAllowed } from "./config/cors";
 import { createInternalAuthMiddleware } from "@app/shared-auth";
 import { prisma } from "./config/prisma";
+import { openApiDefinition } from "./docs/openapi";
 
 dotenv.config();
 
@@ -47,24 +46,26 @@ app.get("/v1/api/health", async (_req, res) => {
 // of the monolith. Behind the gateway req.ip is the hop address, so a per-IP
 // limit at this layer is a single global bucket.
 
-const options = {
-  definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "Expense Tracker API",
-      version: "1.0.0",
-      description: "Daily expense tracker — create, list, update and delete expenses. All routes require a valid JWT cookie issued by the auth service.",
+// Docs are public so you can read the spec without the gateway. Try it out
+// still needs a JWT, and should target the gateway server (see openapi.ts).
+app.get("/api-docs.json", (_req, res) => {
+  res.json(openApiDefinition);
+});
+app.use("/api-docs", (_req, res, next) => {
+  res.removeHeader("Content-Security-Policy");
+  next();
+});
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(openApiDefinition, {
+    customSiteTitle: "Expense Tracker API",
+    swaggerOptions: {
+      persistAuthorization: true,
+      withCredentials: true,
     },
-    servers: [{ url: "/v1/api", description: "Current server" }],
-  },
-  // __dirname resolves to src/ in dev (ts-node) and dist/ in production (compiled JS)
-  apis: [
-    path.join(__dirname, "routes", "*.ts"),
-    path.join(__dirname, "routes", "*.js"),
-  ],
-};
-const swaggerSpec = swaggerJsdoc(options);
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  }),
+);
 
 const allowedOrigins = getAllowedOrigins();
 app.use(

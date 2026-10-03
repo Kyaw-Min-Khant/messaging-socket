@@ -34,12 +34,20 @@ const CATEGORIES = [
 async function main() {
   console.log("Seeding expense categories...");
 
+  // Global categories have userId null. Prisma can't upsert on a compound key
+  // containing null, so look up by name among global rows instead.
   for (const cat of CATEGORIES) {
-    await prisma.expenseCategory.upsert({
-      where: { name: cat.name },
-      update: { description: cat.description },
-      create: cat,
+    const existing = await prisma.expenseCategory.findFirst({
+      where: { userId: null, name: cat.name },
     });
+    if (existing) {
+      await prisma.expenseCategory.update({
+        where: { id: existing.id },
+        data: { description: cat.description },
+      });
+    } else {
+      await prisma.expenseCategory.create({ data: { ...cat, userId: null } });
+    }
   }
 
   console.log(`Seeded ${CATEGORIES.length} categories.`);

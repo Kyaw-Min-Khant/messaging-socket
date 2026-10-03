@@ -14,31 +14,98 @@ enum PaymentMethod {
   ONLINE_PAYMENT
 }
 
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 model Expense {
-  id            String          @id @default(uuid())
-  userId        String          @map("user_id")
-  amount        Decimal         @db.Decimal(12, 2)
-  currency      String          @default("MMK") @db.Char(3)
-  categoryId    String          @map("category_id")
-  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
-  paymentMethod PaymentMethod   @default(CASH) @map("payment_method")
-  description   String?         @db.VarChar(500)
-  spentAt       DateTime        @map("spent_at") @db.Date
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
+  id            String            @id @default(uuid())
+  userId        String            @map("user_id")
+  amount        Decimal           @db.Decimal(12, 2)
+  currency      String            @default("MMK") @db.Char(3)
+  categoryId    String            @map("category_id")
+  category      ExpenseCategory   @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod     @default(CASH) @map("payment_method")
+  description   String?           @db.VarChar(500)
+  spentAt       DateTime          @map("spent_at") @db.Date
+  recurringId   String?           @map("recurring_id")
+  recurring     RecurringExpense? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
 
   @@index([userId, spentAt])
   @@index([userId, categoryId])
   @@map("expenses")
 }
 
+/// userId null = global category seeded for everyone; otherwise owned by that user.
 model ExpenseCategory {
-  id          String    @id @default(uuid())
-  name        String    @unique @db.VarChar(100)
-  description String?   @db.VarChar(500)
+  id          String             @id @default(uuid())
+  userId      String?            @map("user_id")
+  name        String             @db.VarChar(100)
+  description String?            @db.VarChar(500)
   expenses    Expense[]
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  budgets     Budget[]
+  recurring   RecurringExpense[]
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
 
+  @@unique([userId, name])
+  @@index([userId])
   @@map("expense_categories")
+}
+
+/// Monthly spending limit. categoryId null = overall limit across all categories.
+model Budget {
+  id         String           @id @default(uuid())
+  userId     String           @map("user_id")
+  categoryId String?          @map("category_id")
+  category   ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  amount     Decimal          @db.Decimal(12, 2)
+  currency   String           @default("MMK") @db.Char(3)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  @@unique([userId, categoryId])
+  @@map("budgets")
+}
+
+model Income {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("MMK") @db.Char(3)
+  source      String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  receivedAt  DateTime @map("received_at") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, receivedAt])
+  @@map("incomes")
+}
+
+model RecurringExpense {
+  id            String             @id @default(uuid())
+  userId        String             @map("user_id")
+  amount        Decimal            @db.Decimal(12, 2)
+  currency      String             @default("MMK") @db.Char(3)
+  categoryId    String             @map("category_id")
+  category      ExpenseCategory    @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod      @default(CASH) @map("payment_method")
+  description   String?            @db.VarChar(500)
+  frequency     RecurringFrequency
+  startDate     DateTime           @map("start_date") @db.Date
+  endDate       DateTime?          @map("end_date") @db.Date
+  nextRunAt     DateTime           @map("next_run_at") @db.Date
+  active        Boolean            @default(true)
+  expenses      Expense[]
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  @@index([userId, active, nextRunAt])
+  @@map("recurring_expenses")
 }
