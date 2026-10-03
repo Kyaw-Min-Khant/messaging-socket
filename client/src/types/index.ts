@@ -61,6 +61,8 @@ export interface ExpenseCategoryItem {
   id: string;
   name: string;
   description?: string | null;
+  /** null for default categories shared by everyone; set for the user's own. */
+  userId?: string | null;
 }
 
 export type PaymentMethod = "CASH" | "KBZ_PAY" | "AYA_PAY" | "ONLINE_PAYMENT";
@@ -82,6 +84,7 @@ export interface Expense {
   paymentMethod: PaymentMethod;
   description?: string | null;
   spentAt: string;
+  recurringId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +122,78 @@ export interface CategoryTotal {
 
 export interface ExpenseSummary {
   totalAmount: string;
+  totalIncome?: string;
+  net?: string;
   byDay?: DailyTotal[];
   byCategory?: CategoryTotal[];
+}
+
+export interface BudgetWarning {
+  budgetId: string;
+  category: string | null;
+  limit: string;
+  spent: string;
+  percentUsed: number;
+  exceeded: boolean;
+}
+
+export interface Budget {
+  id: string;
+  categoryId: string | null;
+  category: string | null;
+  amount: string;
+  currency: string;
+}
+
+export interface BudgetStatusItem {
+  budgetId: string;
+  categoryId: string | null;
+  category: string | null;
+  limit: string;
+  spent: string;
+  remaining: string;
+  percentUsed: number;
+  exceeded: boolean;
+}
+
+export interface BudgetStatus {
+  month: string;
+  budgets: BudgetStatusItem[];
+}
+
+export interface Income {
+  id: string;
+  amount: string;
+  currency: string;
+  source: string;
+  description?: string | null;
+  receivedAt: string;
+}
+
+export type RecurringFrequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+
+export interface RecurringExpense {
+  id: string;
+  amount: string;
+  currency: string;
+  categoryId: string;
+  category: string;
+  paymentMethod: PaymentMethod;
+  description?: string | null;
+  frequency: RecurringFrequency;
+  startDate: string;
+  endDate?: string | null;
+  nextRunAt: string;
+  active: boolean;
+}
+
+export interface MonthlyReport {
+  month: string;
+  totalIncome: string;
+  totalExpense: string;
+  net: string;
+  expenseCount: number;
+  byCategory: { categoryId: string; category: string; total: string; count: number }[];
+  byPaymentMethod: { paymentMethod: PaymentMethod; total: string; count: number }[];
+  byDay: DailyTotal[];
 }

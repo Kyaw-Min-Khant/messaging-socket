@@ -8,13 +8,11 @@ import { connectRedis, redisClient } from "./config/redis";
 import { registerSocketHandlers } from "./socket";
 import dotenv from "dotenv";
 import { getAllowedOrigins } from "./config/cors";
+import { validateEnv } from "./config/validateEnv";
 
 dotenv.config();
 
-if (!process.env.JWT_SECRET) {
-  console.error("FATAL: JWT_SECRET is not set. Exiting.");
-  process.exit(1);
-}
+validateEnv();
 
 // Log but do not exit: a single rejected promise in one request should not
 // tear down every in-flight response and every live socket.

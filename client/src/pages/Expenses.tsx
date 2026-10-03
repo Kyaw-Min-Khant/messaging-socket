@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import type { Expense, ExpenseCategoryItem, ExpenseFilters, ExpenseSummary, PaymentMethod } from "../types";
+import type { BudgetWarning, Expense, ExpenseCategoryItem, ExpenseFilters, ExpenseSummary, PaymentMethod } from "../types";
 import { PAYMENT_METHOD_LABELS } from "../types";
 import {
   createExpense,
@@ -12,8 +12,24 @@ import {
   type CreateExpenseInput,
 } from "../api/expenses";
 import { useExpenses } from "../hooks/useExpenses";
+import { IncomeTab } from "../components/expenses/IncomeTab";
+import { BudgetsTab } from "../components/expenses/BudgetsTab";
+import { RecurringTab } from "../components/expenses/RecurringTab";
+import { ReportsTab } from "../components/expenses/ReportsTab";
+import { CategoryManagerModal } from "../components/expenses/CategoryManagerModal";
 
-type Tab = "list" | "summary";
+type Tab = "list" | "summary" | "income" | "budgets" | "recurring" | "reports";
+const TABS: Tab[] = ["list", "summary", "income", "budgets", "recurring", "reports"];
+
+function showBudgetWarnings(warnings: BudgetWarning[]) {
+  for (const w of warnings) {
+    const name = w.category ?? "Overall";
+    const msg = w.exceeded
+      ? `${name} budget exceeded: ${formatMoney(w.spent)} / ${formatMoney(w.limit)}`
+      : `${name} budget at ${w.percentUsed}% (${formatMoney(w.spent)} / ${formatMoney(w.limit)})`;
+    toast(msg, { icon: w.exceeded ? "🚨" : "⚠️", duration: 5000 });
+  }
+}
 type GroupBy = "day" | "category";
 
 const CATEGORY_STYLES: Record<string, { bg: string; text: string }> = {
@@ -77,12 +93,15 @@ export function Expenses() {
   const [tab, setTab] = useState<Tab>("list");
 
   const [categories, setCategories] = useState<ExpenseCategoryItem[]>([]);
+  const [showCategories, setShowCategories] = useState(false);
 
-  useEffect(() => {
+  const loadCategories = useCallback(() => {
     getExpenseCategories()
       .then(setCategories)
       .catch(() => toast.error("Failed to load categories"));
   }, []);
+
+  useEffect(loadCategories, [loadCategories]);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -145,13 +164,11 @@ export function Expenses() {
         spentAt: form.spentAt,
         description: form.description || undefined,
       };
-      if (editingId) {
-        await updateExpense(editingId, input);
-        toast.success("Expense updated");
-      } else {
-        await createExpense(input);
-        toast.success("Expense added");
-      }
+      const { budgetWarnings } = editingId
+        ? await updateExpense(editingId, input)
+        : await createExpense(input);
+      toast.success(editingId ? "Expense updated" : "Expense added");
+      showBudgetWarnings(budgetWarnings);
       setShowModal(false);
       reload();
     } catch (err) {
@@ -186,47 +203,28 @@ export function Expenses() {
 
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-white">Expenses</h1>
-          <button
-            onClick={openCreateModal}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-          >
-            + Add Expense
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowCategories(true)}
+              className="text-gray-300 border border-gray-700 hover:bg-gray-800 text-sm px-3 py-2 rounded-xl transition-colors"
+            >
+              Categories
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+            >
+              + Add Expense
+            </button>
+          </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => changeFilter(() => setStartDate(e.target.value))}
-            className={inputClasses}
-          />
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => changeFilter(() => setEndDate(e.target.value))}
-            className={inputClasses}
-          />
-          <select
-            value={category}
-            onChange={(e) => changeFilter(() => setCategory(e.target.value))}
-            className={inputClasses}
-          >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex px-1 gap-1 mb-4">
-          {(["list", "summary"] as Tab[]).map((t) => (
+        <div className="flex px-1 gap-1 mb-4 overflow-x-auto">
+          {TABS.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors capitalize ${
+              className={`flex-1 shrink-0 px-2 py-1.5 text-xs font-medium rounded-lg transition-colors capitalize ${
                 tab === t
                   ? "bg-indigo-600 text-white"
                   : "text-gray-400 hover:text-white hover:bg-gray-800"
@@ -236,6 +234,41 @@ export function Expenses() {
             </button>
           ))}
         </div>
+
+        {(tab === "list" || tab === "summary" || tab === "income") && (
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => changeFilter(() => setStartDate(e.target.value))}
+              className={inputClasses}
+            />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => changeFilter(() => setEndDate(e.target.value))}
+              className={inputClasses}
+            />
+            <select
+              value={category}
+              disabled={tab === "income"}
+              onChange={(e) => changeFilter(() => setCategory(e.target.value))}
+              className={`${inputClasses} disabled:opacity-40`}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {tab === "income" && <IncomeTab startDate={startDate} endDate={endDate} />}
+        {tab === "budgets" && <BudgetsTab categories={categories} />}
+        {tab === "recurring" && <RecurringTab categories={categories} onExpensesChanged={reload} />}
+        {tab === "reports" && <ReportsTab />}
 
         {tab === "list" && (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
@@ -267,6 +300,11 @@ export function Expenses() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-200 truncate">
                         {expense.category}
+                        {expense.recurringId && (
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-indigo-400">
+                            recurring
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
                         {expense.description || format(new Date(expense.spentAt), "MMM d, yyyy")}
@@ -350,10 +388,26 @@ export function Expenses() {
               </div>
             ) : !summary ? null : (
               <>
-                <p className="text-xs text-gray-500 mb-1">Total</p>
-                <p className="text-2xl font-bold text-white mb-6">
-                  {formatMoney(summary.totalAmount)}
-                </p>
+                <div className="grid grid-cols-3 gap-2 mb-6">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Spent</p>
+                    <p className="text-2xl font-bold text-white">{formatMoney(summary.totalAmount)}</p>
+                  </div>
+                  {summary.totalIncome !== undefined && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Income</p>
+                      <p className="text-2xl font-bold text-emerald-400">{formatMoney(summary.totalIncome)}</p>
+                    </div>
+                  )}
+                  {summary.net !== undefined && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Net</p>
+                      <p className={`text-2xl font-bold ${Number(summary.net) < 0 ? "text-red-400" : "text-indigo-300"}`}>
+                        {formatMoney(summary.net)}
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {groupBy === "category" &&
                   (summary.byCategory ?? []).length === 0 ? (
@@ -409,6 +463,14 @@ export function Expenses() {
           </div>
         )}
       </div>
+
+      {showCategories && (
+        <CategoryManagerModal
+          categories={categories}
+          onChanged={loadCategories}
+          onClose={() => setShowCategories(false)}
+        />
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
