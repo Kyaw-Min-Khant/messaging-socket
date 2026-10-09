@@ -7,11 +7,17 @@ import {
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import { seenRecently } from "../lib/presence";
+import type { Friend } from "../types";
 
 interface SocketContextValue {
   socket: Socket | null;
   onlineUsers: Map<string, boolean>;
   connected: boolean;
+  /** Connected now, or last seen within the grace window. */
+  isOnline: (friend: Friend) => boolean;
+  /** Most recent last-seen time we know of (live socket event or API). */
+  lastSeenOf: (friend: Friend) => string | undefined;
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
@@ -23,6 +29,14 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<Map<string, boolean>>(
     new Map(),
   );
+  const [offlineAt, setOfflineAt] = useState<Map<string, number>>(new Map());
+  const [now, setNow] = useState(() => Date.now());
+
+  // Re-evaluate presence periodically so the grace window expires on screen.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -46,9 +60,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     s.on("userOnline", ({ id }: { id: string }) =>
       setOnlineUsers((prev) => new Map(prev).set(id, true)),
     );
-    s.on("userOffline", ({ id }: { id: string }) =>
-      setOnlineUsers((prev) => new Map(prev).set(id, false)),
-    );
+    s.on("userOffline", ({ id }: { id: string }) => {
+      setOnlineUsers((prev) => new Map(prev).set(id, false));
+      setOfflineAt((prev) => new Map(prev).set(id, Date.now()));
+    });
 
     setSocket(s);
 
@@ -59,8 +74,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
+  const lastSeenOf = (friend: Friend) => {
+    const live = offlineAt.get(friend.id);
+    return live !== undefined ? new Date(live).toISOString() : friend.lastSeen;
+  };
+
+  const isOnline = (friend: Friend) => {
+    const live = onlineUsers.get(friend.id);
+    if (live ?? friend.isOnline) return true;
+    return seenRecently(lastSeenOf(friend), now);
+  };
+
   return (
-    <SocketContext.Provider value={{ socket, onlineUsers, connected }}>
+    <SocketContext.Provider value={{ socket, onlineUsers, connected, isOnline, lastSeenOf }}>
       {children}
     </SocketContext.Provider>
   );

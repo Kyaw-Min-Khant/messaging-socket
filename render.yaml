@@ -41,6 +41,11 @@ services:
           type: web
           name: expense-service
           property: hostport
+      - key: SOCKET_SERVICE_URL
+        fromService:
+          type: web
+          name: socket-go
+          property: hostport
 
   # ── Monolith — auth, messaging, users (public URL, gateway-only via secret) ─
   - type: web
@@ -100,4 +105,39 @@ services:
       - key: CLIENT_URL
         sync: false
       - key: DATABASE_URL
+        sync: false
+
+  # ── Socket service (Go) — Socket.IO (public URL, gateway-only via secret) ──
+  # Reads the same Mongo/Redis/Firebase variables as the monolith.
+  - type: web
+    name: socket-go
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: services/socket-go/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: shared-secrets
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY_ID
+        sync: false
+      - key: FIREBASE_CLIENT_ID
         sync: false

@@ -12,7 +12,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "npm run test",
-    "dev:services": "concurrently -n gateway,expense -c blue,cyan \"npm:dev -w services/gateway\" \"npm:dev -w services/expense-service\"",
+    "dev:services": "concurrently -n gateway,expense -c blue,cyan \"cd services/gateway && go run ./cmd/server\" \"npm:dev -w services/expense-service\"",
     "build:services": "npm run build --workspaces --if-present"
   },
   "keywords": [

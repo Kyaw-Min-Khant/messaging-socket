@@ -7,7 +7,8 @@ function normalizeFriend(u: Record<string, unknown>): Friend {
     username: u.username as string,
     avatar: u.avatar as string | undefined,
     isOnline: (u.isOnline as boolean) ?? false,
-    lastSeen: (u.lastSeen as string) ?? new Date().toISOString(),
+    // No fallback to "now": that would make every friend look online for the grace window.
+    lastSeen: u.lastSeen as string | undefined,
   };
 }
 
@@ -25,9 +26,23 @@ export async function addFriend(friendId: string): Promise<void> {
   await apiClient.post("/users/addfriend", { friend_id: friendId });
 }
 
+function normalizeFriendRequest(r: Record<string, unknown>): FriendRequest {
+  const requester = (r.requester ?? {}) as Record<string, unknown>;
+  return {
+    _id: (r._id ?? r.id) as string,
+    requester: {
+      _id: (requester._id ?? requester.id) as string,
+      username: requester.username as string,
+      avatar: requester.avatar as string | undefined,
+    },
+    status: (r.status as FriendRequest["status"]) ?? "pending",
+    createdAt: (r.createdAt ?? r.created_at ?? r.updatedAt ?? r.updated_at) as string,
+  };
+}
+
 export async function getFriendRequests(): Promise<FriendRequest[]> {
   const { data } = await apiClient.get("/users/friendrequest");
-  return data.data ?? [];
+  return (data.data ?? []).map(normalizeFriendRequest);
 }
 
 export async function confirmFriendRequest(requestId: string): Promise<void> {

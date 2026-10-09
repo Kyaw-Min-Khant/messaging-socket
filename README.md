@@ -29,7 +29,7 @@ Gateway  (:4000)                         ← only public origin
    │
    ├── /v1/api/expenses/**  →  Expense service (:4004)  →  PostgreSQL
    ├── /v1/api/**           →  Monolith (:1500)         →  MongoDB + Redis + FCM
-   └── /socket.io           →  Monolith Socket.IO
+   └── /socket.io           →  socket-go (:1600, Go)    →  MongoDB + Redis + FCM
 ```
 
 `INTERNAL_SECRET` is what makes the gateway a trust boundary. Monolith and expense-service are public URLs on Render (private services are not on the free plan), so they reject any request that is missing that header with `403 {"success":false,"error":"Forbidden."}`.
@@ -134,9 +134,14 @@ src/                          Monolith — auth, users, conversations, Socket.IO
   config/                     cors, mongo, redis, firebase, validateEnv
 
 services/
-  gateway/                    Public entry — CORS, rate limit, proxies
-    src/app.ts
-    src/proxies.ts            expense → :4004, everything else + WS → :1500
+  gateway/                    Public entry in Go — CORS, rate limit, security headers, proxies
+    cmd/server/main.go        routes + middleware, graceful shutdown
+    internal/proxy/           expense → :4004, /socket.io → :1600, everything else → :1500
+    internal/middleware/      CORS, rate limiter, helmet-style headers, access log
+  socket-go/                  Socket.IO server in Go (replaces src/socket)
+    cmd/server/main.go        HTTP server, CORS, internal-secret, /health, shutdown
+    internal/socket/          event handlers (same events + payloads as before)
+    internal/auth/            JWT from `token` cookie or handshake.auth.token
   expense-service/            Expense tracker (Express + Prisma)
     prisma/schema.prisma
     prisma/seed.ts
@@ -251,7 +256,7 @@ npm run dev                   # :1500
 cp services/gateway/.env.example services/gateway/.env
 cp services/expense-service/.env.example services/expense-service/.env
 # INTERNAL_SECRET and JWT_SECRET must match the monolith
-npm run dev:services          # gateway :4000 + expense :4004
+npm run dev:services          # gateway :4000 (go run, needs Go 1.26+) + expense :4004
 
 cd services/expense-service
 npm run prisma:migrate
@@ -288,7 +293,7 @@ Shared across services:
 | `INTERNAL_SECRET` | gateway + monolith + expense | Must be identical. Leave empty on the monolith only if Vite talks to `:1500` directly |
 | `CLIENT_URL` | gateway (and backends for CORS) | Comma-separated origins |
 
-Monolith also needs `MONGODB_URI` (or `DEV_MONGODB_URI`), Redis (`REDIS_URL` / `DEV_REDIS_*`), and Firebase Admin keys in non-dev. Expense-service needs `DATABASE_URL`. Gateway needs `MONOLITH_URL` and `EXPENSE_SERVICE_URL`.
+Monolith also needs `MONGODB_URI` (or `DEV_MONGODB_URI`), Redis (`REDIS_URL` / `DEV_REDIS_*`), and Firebase Admin keys in non-dev. Expense-service needs `DATABASE_URL`. Gateway needs `MONOLITH_URL`, `EXPENSE_SERVICE_URL` and `SOCKET_SERVICE_URL`; `TRUST_PROXY_HOPS` (default `1`, Render's edge) sets how many proxies' `X-Forwarded-For` entries to trust for rate limiting.
 
 Client: `VITE_API_PROXY_TARGET` / `VITE_EXPENSE_API_PROXY_TARGET` (local) or `VITE_API_URL` (production gateway). Firebase web keys for push.
 

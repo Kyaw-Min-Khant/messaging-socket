@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
   // proxied directly here so local dev doesn't require running the gateway.
   const expenseApiProxyTarget =
     env.VITE_EXPENSE_API_PROXY_TARGET || "http://localhost:4004";
+  // Socket.IO is served by the Go socket service (services/socket-go). By
+  // default it follows the API target, so with the gateway (:4000) it gets the
+  // internal-secret header; without one it goes straight to socket-go.
+  const socketProxyTarget =
+    env.VITE_SOCKET_PROXY_TARGET ||
+    env.VITE_API_PROXY_TARGET ||
+    "http://localhost:1600";
 
   return {
     plugins: [react()],
@@ -25,7 +32,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
         "/socket.io": {
-          target: apiProxyTarget,
+          target: socketProxyTarget,
           ws: true,
           changeOrigin: true,
         },

@@ -51,6 +51,21 @@ services:
       - backend
     restart: unless-stopped
 
+  # ── Socket service (Go) — Socket.IO for real-time messaging (internal only) ─
+  socket-go:
+    build:
+      context: .
+      dockerfile: services/socket-go/Dockerfile
+    # Same Mongo/Redis/JWT/Firebase settings as the monolith
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 1600
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-local-dev-internal-secret}
+    networks:
+      - backend
+    restart: unless-stopped
+
   # ── Gateway — the only publicly exposed service ────────────────────────────
   gateway:
     build:
@@ -61,12 +76,14 @@ services:
       NODE_ENV: production
       # Docker service names resolve to internal IPs — no public URLs needed
       MONOLITH_URL: http://monolith:1500
+      SOCKET_SERVICE_URL: http://socket-go:1600
       EXPENSE_SERVICE_URL: http://expense-service:4004
       INTERNAL_SECRET: ${INTERNAL_SECRET:-local-dev-internal-secret}
     ports:
       - "80:4000"   # server port 80 → gateway port 4000
     depends_on:
       - monolith
+      - socket-go
       - expense-service
     networks:
       - backend
