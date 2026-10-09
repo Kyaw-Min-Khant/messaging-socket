@@ -2,8 +2,8 @@ import type { ClientRequest } from "http";
 import { createProxyMiddleware, type Options } from "http-proxy-middleware";
 
 /**
- * Routing table for the gateway. Only /v1/api/expenses is wired to a real
- * extracted service today (expense-service); everything else still proxies
+ * Routing table for the gateway. /v1/api/expenses goes to expense-service and
+ * /socket.io goes to the Go socket service (socket-go); everything else still proxies
  * to the original monolith (MONOLITH_URL) unchanged, per the phased rollout —
  * auth-service/user-service/messaging-service get their own entries here only
  * once each is actually extracted, at which point this file is the one place
@@ -28,6 +28,10 @@ export const EXPENSE_SERVICE_URL = withScheme(
 export const MONOLITH_URL = withScheme(
   process.env.MONOLITH_URL,
   "http://localhost:1500",
+);
+export const SOCKET_SERVICE_URL = withScheme(
+  process.env.SOCKET_SERVICE_URL,
+  "http://localhost:1600",
 );
 
 /**
@@ -109,10 +113,10 @@ export const monolithProxy = createProxyMiddleware({
 // the gateway would be forwarded, not just Socket.IO's.
 export const socketProxy = createProxyMiddleware("/socket.io", {
   ...baseOptions,
-  target: MONOLITH_URL,
+  target: SOCKET_SERVICE_URL,
   ws: true,
   // The WebSocket upgrade is a separate code path from REST — without this the
-  // handshake reaches the monolith unstamped and gets 403'd, which would break
+  // handshake reaches socket-go unstamped and gets 403'd, which would break
   // real-time while leaving REST working.
   onProxyReqWs: (proxyReq: ClientRequest) => addInternalSecret(proxyReq),
 });

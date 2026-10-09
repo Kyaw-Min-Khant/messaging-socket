@@ -12,6 +12,7 @@ import {
   socketProxy,
   EXPENSE_SERVICE_URL,
   MONOLITH_URL,
+  SOCKET_SERVICE_URL,
 } from "./proxies";
 
 dotenv.config();
@@ -75,6 +76,7 @@ app.get("/health/ready", async (_req, res) => {
   const upstreams = await Promise.all([
     probe("monolith", MONOLITH_URL, "/v1/api/health"),
     probe("expense-service", EXPENSE_SERVICE_URL, "/v1/api/health"),
+    probe("socket-go", SOCKET_SERVICE_URL, "/health"),
   ]);
 
   const ready = upstreams.every((u) => u.ok);
