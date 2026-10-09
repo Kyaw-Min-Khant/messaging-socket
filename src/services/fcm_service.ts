@@ -37,7 +37,10 @@ class FCMService {
     }
   }
 
-  async sendFriendRequestNotification(fcmtoken: string, requesterUsername: string) {
+  async sendFriendRequestNotification(
+    fcmtoken: string,
+    requesterUsername: string,
+  ) {
     try {
       await admin.messaging().send({
         token: fcmtoken,

@@ -36,7 +36,9 @@ app.get("/v1/api/health", async (_req, res) => {
 
   res.status(dbOk ? 200 : 503).json({
     success: dbOk,
-    message: dbOk ? "Expense service is running" : "Expense service is degraded",
+    message: dbOk
+      ? "Expense service is running"
+      : "Expense service is degraded",
     dependencies: { postgres: dbOk },
     timestamp: new Date().toISOString(),
   });

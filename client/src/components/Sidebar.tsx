@@ -1,49 +1,40 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import type { Friend, FriendRequest } from "../types";
-import { getFriends, getFriendRequests, getAvailableUsers } from "../api/users";
 import { logout } from "../api/auth";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
 import { FriendRequests } from "./FriendRequests";
 import { AddUsers } from "./AddUsers";
+import { AppSwitcher, HomeButton } from "./AppSwitcher";
+import { Avatar } from "./Avatar";
 
 interface Props {
+  friends: Friend[];
+  requests: FriendRequest[];
+  availableUsers: Friend[];
+  isLoading: boolean;
+  reload: () => void;
   selectedFriend: Friend | null;
   onSelectFriend: (friend: Friend) => void;
 }
 
 type Tab = "chats" | "requests" | "add";
 
-export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
+export function Sidebar({
+  friends,
+  requests,
+  availableUsers,
+  isLoading,
+  reload,
+  selectedFriend,
+  onSelectFriend,
+}: Props) {
   const { user, clearAuth } = useAuth();
-  const navigate = useNavigate();
   const { onlineUsers } = useSocket();
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<Friend[]>([]);
   const [tab, setTab] = useState<Tab>("chats");
   const [search, setSearch] = useState("");
-
-  const loadData = async () => {
-    try {
-      const [f, r, u] = await Promise.all([
-        getFriends(),
-        getFriendRequests(),
-        getAvailableUsers(),
-      ]);
-      setFriends(f);
-      setRequests(r);
-      setAvailableUsers(u);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -53,80 +44,58 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
     }
   };
 
-  const filtered = friends.filter((f) =>
-    f.username.toLowerCase().includes(search.toLowerCase()),
-  );
+  const isOnline = (f: Friend) => onlineUsers.get(f.id) ?? f.isOnline;
+  const matches = (name: string) => name.toLowerCase().includes(search.trim().toLowerCase());
+
+  // Online friends first, then alphabetical.
+  const filtered = friends
+    .filter((f) => matches(f.username))
+    .sort((a, b) => Number(isOnline(b)) - Number(isOnline(a)) || a.username.localeCompare(b.username));
+  const activeNow = friends.filter(isOnline);
+
+  const TABS: { key: Tab; label: string; badge?: number }[] = [
+    { key: "chats", label: "Chats" },
+    { key: "requests", label: "Requests", badge: requests.length },
+    { key: "add", label: "Find people" },
+  ];
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 border-r border-gray-800">
-      {/* App header */}
-      <div className="flex items-center justify-between px-4 py-3.5 shrink-0 border-b border-gray-800">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-white"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-            </svg>
+    <div className="flex flex-col w-full h-full bg-gray-950 md:bg-gray-900 md:border-r md:border-gray-800">
+      {/* App bar */}
+      <div className="shrink-0 pt-[env(safe-area-inset-top)]">
+        <div className="h-14 px-2 flex items-center gap-1">
+          <HomeButton />
+          <div className="flex-1 flex justify-center md:justify-start">
+            <AppSwitcher />
           </div>
-          <span className="text-white font-semibold text-sm">Messages</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => navigate("/expenses")}
-            title="Expenses"
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
-            </svg>
-          </button>
           <button
             onClick={handleLogout}
             title="Logout"
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label="Logout"
+            className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
             </svg>
           </button>
         </div>
       </div>
 
-      {/* Current user */}
-      <button
-        onClick={() => navigate("/profile")}
-        className="flex items-center gap-3 px-4 py-3 shrink-0 hover:bg-gray-800 transition-colors text-left w-full"
-      >
-        <div className="relative">
-          <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-semibold text-sm shrink-0 overflow-hidden">
-            {user?.avatar ? (
-              <img
-                src={user.avatar}
-                alt={user.username}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              user?.username?.[0]?.toUpperCase()
-            )}
-          </div>
-          <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border-2 border-gray-900" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-white truncate">
-            {user?.username}
-          </p>
-          <p className="text-xs text-green-400">Online</p>
-        </div>
-      </button>
+      {/* Title + me */}
+      <div className="shrink-0 px-4 pt-1 pb-3 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Messages</h1>
+        {user && (
+          <Link to="/profile" title="Your profile" className="rounded-full hover:ring-2 hover:ring-indigo-500/60 transition">
+            <Avatar name={user.username} src={user.avatar} size="sm" online ringClass="border-gray-950 md:border-gray-900" />
+          </Link>
+        )}
+      </div>
 
       {/* Search */}
-      <div className="px-3 pb-2 shrink-0">
+      <div className="shrink-0 px-4 pb-3">
         <div className="relative">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -139,127 +108,114 @@ export function Sidebar({ selectedFriend, onSelectFriend }: Props) {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-full bg-gray-800 text-white placeholder-gray-500 text-sm rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-shadow"
+            placeholder={tab === "add" ? "Search people" : "Search friends"}
+            className="w-full bg-gray-800/80 text-white placeholder-gray-500 text-base md:text-sm rounded-full pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 transition-shadow"
           />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex px-3 gap-1 shrink-0 pb-2">
-        {(["chats", "requests", "add"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-              tab === t
-                ? "bg-indigo-600 text-white"
-                : "text-gray-400 hover:text-white hover:bg-gray-800"
-            }`}
-          >
-            {t === "requests" && requests.length > 0 ? (
-              <span className="flex items-center justify-center gap-1">
-                Requests
-                <span className="w-4 h-4 bg-red-500 text-[9px] rounded-full flex items-center justify-center text-white font-bold">
-                  {requests.length}
+      <div className="shrink-0 px-4 pb-3">
+        <div className="flex p-1 bg-gray-800/80 rounded-xl">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                tab === t.key ? "bg-gray-950 text-white shadow" : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {t.label}
+              {!!t.badge && (
+                <span className="min-w-[18px] h-[18px] px-1 bg-rose-500 text-[10px] rounded-full flex items-center justify-center text-white font-bold">
+                  {t.badge}
                 </span>
-              </span>
-            ) : t === "chats" ? (
-              "Chats"
-            ) : t === "requests" ? (
-              "Requests"
-            ) : (
-              "Add"
-            )}
-          </button>
-        ))}
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         {tab === "chats" && (
-          <div className="space-y-0.5 px-2 pb-2">
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-14 text-gray-500">
-                <svg
-                  className="w-10 h-10 mb-3 opacity-30"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-                </svg>
-                <p className="text-sm">No friends yet</p>
-                <button
-                  onClick={() => setTab("add")}
-                  className="mt-1.5 text-xs text-indigo-400 hover:text-indigo-300"
-                >
-                  Find people to chat with
-                </button>
+          <>
+            {activeNow.length > 0 && !search && (
+              <div className="pb-3">
+                <p className="px-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Active now</p>
+                <div className="flex gap-4 overflow-x-auto px-4">
+                  {activeNow.map((f) => (
+                    <button key={f.id} onClick={() => onSelectFriend(f)} className="flex flex-col items-center gap-1 w-14 shrink-0">
+                      <Avatar name={f.username} src={f.avatar} size="lg" online ringClass="border-gray-950 md:border-gray-900" />
+                      <span className="text-[11px] text-gray-400 w-full truncate text-center">{f.username}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isLoading ? (
+              <div className="flex justify-center py-14">
+                <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-14 px-6">
+                <span className="text-4xl mb-3" aria-hidden>
+                  {search ? "🔍" : "👋"}
+                </span>
+                <p className="text-sm text-gray-400">{search ? "No friends match your search" : "No friends yet"}</p>
+                {!search && (
+                  <button
+                    onClick={() => setTab("add")}
+                    className="mt-2 text-sm font-medium text-indigo-400 hover:text-indigo-300"
+                  >
+                    Find people to chat with
+                  </button>
+                )}
               </div>
             ) : (
-              filtered.map((friend) => {
-                const isOnline = onlineUsers.get(friend.id) ?? friend.isOnline;
-                const isSelected = selectedFriend?.id === friend.id;
-                return (
-                  <button
-                    key={friend.id}
-                    onClick={() => onSelectFriend(friend)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${
-                      isSelected ? "bg-indigo-600" : "hover:bg-gray-800"
-                    }`}
-                  >
-                    <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center text-white font-semibold text-sm overflow-hidden">
-                        {friend.avatar ? (
-                          <img
-                            src={friend.avatar}
-                            alt={friend.username}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          friend.username[0].toUpperCase()
-                        )}
+              <div className="px-2 space-y-0.5">
+                {filtered.map((friend) => {
+                  const online = isOnline(friend);
+                  const selected = selectedFriend?.id === friend.id;
+                  return (
+                    <button
+                      key={friend.id}
+                      onClick={() => onSelectFriend(friend)}
+                      className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl text-left transition-colors ${
+                        selected ? "bg-indigo-600/20 ring-1 ring-indigo-500/40" : "hover:bg-gray-800/70 active:bg-gray-800"
+                      }`}
+                    >
+                      <Avatar
+                        name={friend.username}
+                        src={friend.avatar}
+                        online={online}
+                        ringClass="border-gray-950 md:border-gray-900"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-semibold text-gray-100 truncate">{friend.username}</p>
+                        <p className={`text-xs truncate ${online ? "text-emerald-400" : "text-gray-500"}`}>
+                          {online
+                            ? "Online"
+                            : `Active ${formatDistanceToNow(new Date(friend.lastSeen), { addSuffix: true })}`}
+                        </p>
                       </div>
-                      {isOnline && (
-                        <span
-                          className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 bg-green-400 ${
-                            isSelected ? "border-indigo-600" : "border-gray-900"
-                          }`}
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`text-sm font-medium truncate ${
-                          isSelected ? "text-white" : "text-gray-200"
-                        }`}
-                      >
-                        {friend.username}
-                      </p>
-                      <p
-                        className={`text-xs truncate ${
-                          isSelected ? "text-indigo-200" : "text-gray-500"
-                        }`}
-                      >
-                        {isOnline
-                          ? "Online"
-                          : `${formatDistanceToNow(new Date(friend.lastSeen), { addSuffix: true })}`}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })
+                      <svg className="w-4 h-4 text-gray-600 md:hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                      </svg>
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {tab === "requests" && (
-          <FriendRequests requests={requests} onAccepted={loadData} />
+          <FriendRequests requests={requests.filter((r) => matches(r.requester.username))} onAccepted={reload} />
         )}
 
-        {tab === "add" && (
-          <AddUsers users={availableUsers} onAdded={loadData} />
-        )}
+        {tab === "add" && <AddUsers users={availableUsers.filter((u) => matches(u.username))} onAdded={reload} />}
       </div>
     </div>
   );

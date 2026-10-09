@@ -24,8 +24,10 @@ const REQUIRED_DEVELOPMENT = ["JWT_SECRET", "DEV_MONGODB_URI"] as const;
 
 // Not fatal, but each has a silent-failure mode worth naming.
 const RECOMMENDED: Record<string, string> = {
-  REDIS_PORT: "defaults to 6379 — wrong for hosted Redis, which uses a custom port",
-  REDIS_PASSWORD: "hosted Redis requires auth; without it the connection is refused",
+  REDIS_PORT:
+    "defaults to 6379 — wrong for hosted Redis, which uses a custom port",
+  REDIS_PASSWORD:
+    "hosted Redis requires auth; without it the connection is refused",
   // INTERNAL_SECRET is warned about in app.ts, at the point it is used.
 };
 

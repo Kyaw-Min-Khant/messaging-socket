@@ -8,6 +8,10 @@ import fcm_service from "../services/fcm_service";
 import { JwtPayload } from "../types";
 
 export function registerSocketHandlers(io: Server) {
+  // A user is online if any of their sockets (tabs/devices) is in their personal room
+  const isUserOnline = async (userId: string) =>
+    (await io.in(userId).fetchSockets()).length > 0;
+
   // Validate JWT before accepting the connection — client must send token in handshake.auth
   io.use((socket, next) => {
     // Cookie takes priority; fall back to handshake.auth.token for non-browser clients
@@ -32,6 +36,9 @@ export function registerSocketHandlers(io: Server) {
     const userId = socket.data.userId as string;
     const username = socket.data.username as string;
 
+    // Personal room keyed by userId — lets every tab/device of this user receive events
+    socket.join(userId);
+
     try {
       // Auto-register using JWT-verified identity — no need to trust client-sent userId
       const userEntry = {
@@ -44,7 +51,6 @@ export function registerSocketHandlers(io: Server) {
       };
       await Promise.all([
         redisClient.hSet("connectedUsers", socket.id, JSON.stringify(userEntry)),
-        redisClient.hSet("userSockets", userId, socket.id),
         User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() }),
       ]);
       console.log(`🔌 ${username} connected: ${socket.id}`);
@@ -96,9 +102,9 @@ export function registerSocketHandlers(io: Server) {
             status: "sent",
           };
 
-          const recipientSocketId = await redisClient.hGet("userSockets", data.recipientId);
-          if (recipientSocketId) {
-            io.to(recipientSocketId).emit("newDirectMessage", {
+          const recipientOnline = await isUserOnline(data.recipientId);
+          if (recipientOnline) {
+            io.to(data.recipientId).emit("newDirectMessage", {
               ...messagePayload,
               status: "delivered",
             });
@@ -108,7 +114,7 @@ export function registerSocketHandlers(io: Server) {
           socket.emit("messageSent", messagePayload);
 
           // Only push if recipient has no active socket (they are offline/background)
-          if (!recipientSocketId) {
+          if (!recipientOnline) {
             const recipient = await User.findById(data.recipientId).select("fcmtoken").lean();
             if (recipient?.fcmtoken) {
               const body =
@@ -136,14 +142,11 @@ export function registerSocketHandlers(io: Server) {
         socket.emit("error", { message: "Invalid recipient" });
         return;
       }
-      const recipientSocketId = await redisClient.hGet("userSockets", data.recipientId);
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("userTyping", {
-          senderId: userId,
-          senderUsername: username,
-          isTyping: data.isTyping,
-        });
-      }
+      io.to(data.recipientId).emit("userTyping", {
+        senderId: userId,
+        senderUsername: username,
+        isTyping: data.isTyping,
+      });
     });
 
     socket.on("markAsRead", async (data: { messageId: string; senderId: string }) => {
@@ -152,14 +155,11 @@ export function registerSocketHandlers(io: Server) {
           status: "seen",
           seenAt: new Date(),
         });
-        const senderSocketId = await redisClient.hGet("userSockets", data.senderId);
-        if (senderSocketId) {
-          io.to(senderSocketId).emit("messageRead", {
-            messageId: data.messageId,
-            readBy: userId,
-            readAt: new Date().toISOString(),
-          });
-        }
+        io.to(data.senderId).emit("messageRead", {
+          messageId: data.messageId,
+          readBy: userId,
+          readAt: new Date().toISOString(),
+        });
       } catch (error) {
         console.error("❌ markAsRead error:", error);
       }
@@ -167,11 +167,15 @@ export function registerSocketHandlers(io: Server) {
 
     socket.on("disconnect", async () => {
       try {
-        await Promise.all([
-          User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() }),
-          redisClient.hDel("connectedUsers", socket.id),
-          redisClient.hDel("userSockets", userId),
-        ]);
+        await redisClient.hDel("connectedUsers", socket.id);
+
+        // Socket has already left its rooms here; stay online if another tab/device is connected
+        if (await isUserOnline(userId)) {
+          console.log(`👋 ${username} closed one connection: ${socket.id}`);
+          return;
+        }
+
+        await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
         socket.broadcast.emit("userOffline", {
           id: userId,
           username,

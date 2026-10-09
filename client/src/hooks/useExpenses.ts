@@ -3,7 +3,11 @@ import toast from "react-hot-toast";
 import type { Expense, ExpenseFilters, Pagination } from "../types";
 import { deleteExpense as apiDeleteExpense, getExpenses } from "../api/expenses";
 
-export function useExpenses(filters: ExpenseFilters) {
+/**
+ * Loads a page of expenses. With `append`, pages after the first are added to
+ * the existing list (for "Load more") instead of replacing it.
+ */
+export function useExpenses(filters: ExpenseFilters, { append = false }: { append?: boolean } = {}) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -14,7 +18,12 @@ export function useExpenses(filters: ExpenseFilters) {
     setIsLoading(true);
     try {
       const result = await getExpenses(filters);
-      setExpenses(result.expenses);
+      const appending = append && (filters.page ?? 1) > 1;
+      setExpenses((prev) => {
+        if (!appending) return result.expenses;
+        const seen = new Set(prev.map((e) => e.id));
+        return [...prev, ...result.expenses.filter((e) => !seen.has(e.id))];
+      });
       setPagination(result.pagination);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load expenses");
@@ -22,7 +31,7 @@ export function useExpenses(filters: ExpenseFilters) {
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }, [filtersKey, append]);
 
   useEffect(() => {
     reload();
