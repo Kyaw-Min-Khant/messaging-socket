@@ -5,7 +5,7 @@
 Connect to the Socket.IO server:
 
 ```javascript
-const socket = io('http://localhost:1500');
+const socket = io('http://localhost:1600'); // socket-go; use the gateway origin in production
 ```
 
 ## Events
@@ -241,7 +241,7 @@ socket.on('error', (error) => {
 ## Complete Example
 
 ```javascript
-const socket = io('http://localhost:1500');
+const socket = io('http://localhost:1600'); // socket-go; use the gateway origin in production
 
 // Authenticate
 socket.emit('authenticate', { username: 'john_doe' });

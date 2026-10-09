@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
-import type { Friend, FriendRequest } from "../types";
+import { format, isThisWeek, isToday } from "date-fns";
+import type { Friend, FriendRequest, Message } from "../types";
 import { logout } from "../api/auth";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
+import { lastSeenLabel } from "../lib/presence";
+import { useConversationPreviews } from "../hooks/useConversationPreviews";
 import { FriendRequests } from "./FriendRequests";
 import { AddUsers } from "./AddUsers";
 import { AppSwitcher, HomeButton } from "./AppSwitcher";
@@ -22,6 +24,27 @@ interface Props {
 
 type Tab = "chats" | "requests" | "add";
 
+function shortTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return "";
+  if (isToday(date)) return format(date, "h:mm a");
+  if (isThisWeek(date)) return format(date, "EEE");
+  return format(date, "MMM d");
+}
+
+function previewText(msg: Message): string {
+  switch (msg.messageType) {
+    case "image":
+      return "📷 Photo";
+    case "audio":
+      return "🎤 Voice message";
+    case "file":
+      return "📎 File";
+    default:
+      return msg.message;
+  }
+}
+
 export function Sidebar({
   friends,
   requests,
@@ -32,7 +55,8 @@ export function Sidebar({
   onSelectFriend,
 }: Props) {
   const { user, clearAuth } = useAuth();
-  const { onlineUsers } = useSocket();
+  const { socket, isOnline, lastSeenOf } = useSocket();
+  const { previewOf, totalUnread } = useConversationPreviews(socket, user?.id ?? "", selectedFriend?.id ?? null);
   const [tab, setTab] = useState<Tab>("chats");
   const [search, setSearch] = useState("");
 
@@ -44,17 +68,25 @@ export function Sidebar({
     }
   };
 
-  const isOnline = (f: Friend) => onlineUsers.get(f.id) ?? f.isOnline;
   const matches = (name: string) => name.toLowerCase().includes(search.trim().toLowerCase());
 
-  // Online friends first, then alphabetical.
+  // Most recent conversation first; friends without messages follow, online first, then alphabetical.
+  const lastAt = (f: Friend) => {
+    const t = new Date(previewOf(f.id)?.lastMessage.timestamp ?? "").getTime();
+    return isNaN(t) ? 0 : t;
+  };
   const filtered = friends
     .filter((f) => matches(f.username))
-    .sort((a, b) => Number(isOnline(b)) - Number(isOnline(a)) || a.username.localeCompare(b.username));
+    .sort(
+      (a, b) =>
+        lastAt(b) - lastAt(a) ||
+        Number(isOnline(b)) - Number(isOnline(a)) ||
+        a.username.localeCompare(b.username),
+    );
   const activeNow = friends.filter(isOnline);
 
   const TABS: { key: Tab; label: string; badge?: number }[] = [
-    { key: "chats", label: "Chats" },
+    { key: "chats", label: "Chats", badge: totalUnread },
     { key: "requests", label: "Requests", badge: requests.length },
     { key: "add", label: "Find people" },
   ];
@@ -178,6 +210,8 @@ export function Sidebar({
                 {filtered.map((friend) => {
                   const online = isOnline(friend);
                   const selected = selectedFriend?.id === friend.id;
+                  const preview = previewOf(friend.id);
+                  const unread = preview?.unread ?? 0;
                   return (
                     <button
                       key={friend.id}
@@ -193,12 +227,31 @@ export function Sidebar({
                         ringClass="border-gray-950 md:border-gray-900"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[15px] font-semibold text-gray-100 truncate">{friend.username}</p>
-                        <p className={`text-xs truncate ${online ? "text-emerald-400" : "text-gray-500"}`}>
-                          {online
-                            ? "Online"
-                            : `Active ${formatDistanceToNow(new Date(friend.lastSeen), { addSuffix: true })}`}
-                        </p>
+                        <div className="flex items-baseline gap-2">
+                          <p className="flex-1 text-[15px] font-semibold text-gray-100 truncate">{friend.username}</p>
+                          {preview && (
+                            <span className={`text-[11px] shrink-0 ${unread ? "text-indigo-400 font-semibold" : "text-gray-500"}`}>
+                              {shortTime(preview.lastMessage.timestamp)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {preview ? (
+                            <p className={`flex-1 text-xs truncate ${unread ? "text-gray-100 font-semibold" : "text-gray-500"}`}>
+                              {preview.lastMessage.senderId === user?.id && "You: "}
+                              {previewText(preview.lastMessage)}
+                            </p>
+                          ) : (
+                            <p className={`flex-1 text-xs truncate ${online ? "text-emerald-400" : "text-gray-500"}`}>
+                              {online ? "Online" : lastSeenLabel("Active", lastSeenOf(friend))}
+                            </p>
+                          )}
+                          {unread > 0 && (
+                            <span className="min-w-[20px] h-5 px-1.5 bg-indigo-600 text-[11px] rounded-full flex items-center justify-center text-white font-bold shrink-0">
+                              {unread > 99 ? "99+" : unread}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <svg className="w-4 h-4 text-gray-600 md:hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                         <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />

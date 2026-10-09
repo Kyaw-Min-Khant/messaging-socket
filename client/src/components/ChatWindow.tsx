@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { differenceInMinutes, format, formatDistanceToNow, isSameDay, isSameYear, isToday, isYesterday } from "date-fns";
+import { differenceInMinutes, format, isSameDay, isSameYear, isToday, isYesterday } from "date-fns";
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
 import type { Friend, Message } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
+import { lastSeenLabel } from "../lib/presence";
 import { useMessages } from "../hooks/useMessages";
 import { MessageBubble } from "./MessageBubble";
 import { Avatar } from "./Avatar";
@@ -32,7 +33,7 @@ const hasFinePointer = () => window.matchMedia?.("(pointer: fine)").matches ?? t
 
 export function ChatWindow({ friend, onBack }: Props) {
   const { user } = useAuth();
-  const { socket, onlineUsers } = useSocket();
+  const { socket, isOnline: isFriendOnline, lastSeenOf } = useSocket();
   const { messages, isLoading, typingUser, sendMessage, sendTyping } = useMessages(friend.id, socket, user!.id);
 
   const [input, setInput] = useState("");
@@ -43,7 +44,7 @@ export function ChatWindow({ friend, onBack }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
-  const isOnline = onlineUsers.get(friend.id) ?? friend.isOnline;
+  const isOnline = isFriendOnline(friend);
 
   // Jump to the bottom on first load, then scroll smoothly for new messages.
   useEffect(() => {
@@ -120,7 +121,7 @@ export function ChatWindow({ friend, onBack }: Props) {
     ? "typing…"
     : isOnline
       ? "Online"
-      : `Last seen ${formatDistanceToNow(new Date(friend.lastSeen), { addSuffix: true })}`;
+      : lastSeenLabel("Last seen", lastSeenOf(friend));
 
   return (
     <div className="flex flex-col w-full h-full bg-gray-950">

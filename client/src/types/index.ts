@@ -13,7 +13,7 @@ export interface Friend {
   username: string;
   avatar?: string;
   isOnline: boolean;
-  lastSeen: string;
+  lastSeen?: string;
 }
 
 export interface FriendRequest {
@@ -24,7 +24,7 @@ export interface FriendRequest {
     avatar?: string;
   };
   status: 'pending' | 'accepted' | 'blocked';
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface Message {

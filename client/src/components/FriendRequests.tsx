@@ -10,6 +10,12 @@ interface Props {
   onAccepted: () => void;
 }
 
+function timeAgo(value: string | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : formatDistanceToNow(date, { addSuffix: true });
+}
+
 export function FriendRequests({ requests, onAccepted }: Props) {
   const [accepting, setAccepting] = useState<string | null>(null);
 
@@ -45,7 +51,7 @@ export function FriendRequests({ requests, onAccepted }: Props) {
           <div className="flex-1 min-w-0">
             <p className="text-[15px] font-semibold text-gray-100 truncate">{req.requester.username}</p>
             <p className="text-xs text-gray-500 truncate">
-              Wants to connect · {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+              Wants to connect{timeAgo(req.createdAt) ? ` · ${timeAgo(req.createdAt)}` : ""}
             </p>
           </div>
           <button

@@ -3,6 +3,7 @@ import type { Friend } from "../types";
 import { addFriend } from "../api/users";
 import toast from "react-hot-toast";
 import { Avatar } from "./Avatar";
+import { useSocket } from "../contexts/SocketContext";
 
 interface Props {
   users: Friend[];
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function AddUsers({ users, onAdded }: Props) {
+  const { isOnline } = useSocket();
   const [sending, setSending] = useState<string | null>(null);
   const [sent, setSent] = useState<Set<string>>(new Set());
 
@@ -45,11 +47,11 @@ export function AddUsers({ users, onAdded }: Props) {
         const isSent = sent.has(u.id);
         return (
           <div key={u.id} className="flex items-center gap-3 px-2.5 py-2.5 rounded-2xl">
-            <Avatar name={u.username} src={u.avatar} online={u.isOnline} ringClass="border-gray-950 md:border-gray-900" />
+            <Avatar name={u.username} src={u.avatar} online={isOnline(u)} ringClass="border-gray-950 md:border-gray-900" />
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-gray-100 truncate">{u.username}</p>
-              <p className={`text-xs ${u.isOnline ? "text-emerald-400" : "text-gray-500"}`}>
-                {u.isOnline ? "Online" : "Offline"}
+              <p className={`text-xs ${isOnline(u) ? "text-emerald-400" : "text-gray-500"}`}>
+                {isOnline(u) ? "Online" : "Offline"}
               </p>
             </div>
             <button
