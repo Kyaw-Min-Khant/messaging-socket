@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { FriendRequest } from "../types";
 import { confirmFriendRequest } from "../api/users";
 import toast from "react-hot-toast";
+import { formatDistanceToNow } from "date-fns";
+import { Avatar } from "./Avatar";
 
 interface Props {
   requests: FriendRequest[];
@@ -26,50 +28,33 @@ export function FriendRequests({ requests, onAccepted }: Props) {
 
   if (requests.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-        <svg
-          className="w-12 h-12 mb-3 opacity-30"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-        </svg>
-        <p className="text-sm">No pending requests</p>
+      <div className="flex flex-col items-center justify-center text-center py-14 px-6">
+        <span className="text-4xl mb-3" aria-hidden>
+          📭
+        </span>
+        <p className="text-sm text-gray-400">No pending requests</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-1 p-2">
+    <div className="px-2 space-y-0.5">
       {requests.map((req) => (
-        <div
-          key={req._id}
-          className="flex items-center gap-3 p-3 rounded-xl bg-gray-800/50"
-        >
-          <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-semibold text-sm shrink-0 overflow-hidden">
-            {req.requester.avatar ? (
-              <img
-                src={req.requester.avatar}
-                alt={req.requester.username}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              req.requester.username[0].toUpperCase()
-            )}
-          </div>
+        <div key={req._id} className="flex items-center gap-3 px-2.5 py-2.5 rounded-2xl">
+          <Avatar name={req.requester.username} src={req.requester.avatar} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
-              {req.requester.username}
+            <p className="text-[15px] font-semibold text-gray-100 truncate">{req.requester.username}</p>
+            <p className="text-xs text-gray-500 truncate">
+              Wants to connect · {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
             </p>
-            <p className="text-xs text-gray-400">Wants to connect</p>
           </div>
           <button
             onClick={() => handleAccept(req._id)}
             disabled={accepting === req._id}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors shrink-0"
+            className="h-9 min-w-[76px] px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold rounded-full transition-colors shrink-0 flex items-center justify-center"
           >
             {accepting === req._id ? (
-              <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin inline-block" />
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               "Accept"
             )}

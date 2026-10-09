@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -7,7 +7,25 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Chat } from './pages/Chat';
 import { Profile } from './pages/Profile';
-import { Expenses } from './pages/Expenses';
+import { ServicePicker } from './pages/ServicePicker';
+
+// Expense screens (and recharts) are code-split so the chat bundle stays small.
+const ExpensesLayout = lazy(() => import('./pages/expenses/ExpensesLayout').then((m) => ({ default: m.ExpensesLayout })));
+const HomeScreen = lazy(() => import('./pages/expenses/HomeScreen').then((m) => ({ default: m.HomeScreen })));
+const ActivityScreen = lazy(() => import('./pages/expenses/ActivityScreen').then((m) => ({ default: m.ActivityScreen })));
+const BudgetsScreen = lazy(() => import('./pages/expenses/BudgetsScreen').then((m) => ({ default: m.BudgetsScreen })));
+const InsightsScreen = lazy(() => import('./pages/expenses/InsightsScreen').then((m) => ({ default: m.InsightsScreen })));
+const MoreScreen = lazy(() => import('./pages/expenses/MoreScreen').then((m) => ({ default: m.MoreScreen })));
+const IncomeScreen = lazy(() => import('./pages/expenses/IncomeScreen').then((m) => ({ default: m.IncomeScreen })));
+const RecurringScreen = lazy(() => import('./pages/expenses/RecurringScreen').then((m) => ({ default: m.RecurringScreen })));
+
+function Loading() {
+  return (
+    <div className="h-full bg-gray-950 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -50,6 +68,14 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
+            <ServicePicker />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chats/:friendId?"
+        element={
+          <ProtectedRoute>
             <SocketProvider>
               <Chat />
             </SocketProvider>
@@ -68,10 +94,20 @@ function AppRoutes() {
         path="/expenses"
         element={
           <ProtectedRoute>
-            <Expenses />
+            <Suspense fallback={<Loading />}>
+              <ExpensesLayout />
+            </Suspense>
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<HomeScreen />} />
+        <Route path="transactions" element={<ActivityScreen />} />
+        <Route path="budgets" element={<BudgetsScreen />} />
+        <Route path="insights" element={<InsightsScreen />} />
+        <Route path="more" element={<MoreScreen />} />
+        <Route path="income" element={<IncomeScreen />} />
+        <Route path="recurring" element={<RecurringScreen />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

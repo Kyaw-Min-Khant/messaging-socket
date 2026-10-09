@@ -53,11 +53,18 @@ export const addFriendController = async (
     });
 
     // Fire-and-forget: push notification to the recipient
-    User.findById(friend_id).select("fcmtoken").lean().then((recipient) => {
-      if (recipient?.fcmtoken && req.user?.username) {
-        fcm_service.sendFriendRequestNotification(recipient.fcmtoken, req.user.username);
-      }
-    }).catch(() => {});
+    User.findById(friend_id)
+      .select("fcmtoken")
+      .lean()
+      .then((recipient) => {
+        if (recipient?.fcmtoken && req.user?.username) {
+          fcm_service.sendFriendRequestNotification(
+            recipient.fcmtoken,
+            req.user.username,
+          );
+        }
+      })
+      .catch(() => {});
   } catch (e) {
     console.log("Error in Add Friend:", e);
     next(e);
@@ -140,7 +147,11 @@ export const updateAvatarController = async (
     }
     await user_service.updateAvatar(req.user.id, avatar);
     await invalidateUserCache(String(req.user.id));
-    res.status(200).json({ success: true, message: "Avatar updated successfully", data: { avatar } });
+    res.status(200).json({
+      success: true,
+      message: "Avatar updated successfully",
+      data: { avatar },
+    });
   } catch (e) {
     next(e);
   }
