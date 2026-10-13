@@ -1,13 +1,10 @@
 import { createServer } from "http";
 import mongoose from "mongoose";
-import { Server } from "socket.io";
 import app from "./app";
 import connectDB from "./config/database";
 import initializeFirebase from "./config/firebase";
 import { connectRedis, redisClient } from "./config/redis";
-import { registerSocketHandlers } from "./socket";
 import dotenv from "dotenv";
-import { getAllowedOrigins } from "./config/cors";
 import { validateEnv } from "./config/validateEnv";
 
 dotenv.config();
@@ -15,7 +12,7 @@ dotenv.config();
 validateEnv();
 
 // Log but do not exit: a single rejected promise in one request should not
-// tear down every in-flight response and every live socket.
+// tear down every in-flight response.
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
 });
@@ -27,21 +24,15 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
+// Socket.IO is served by services/socket-go; this process is REST only.
 const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: getAllowedOrigins(),
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
 
 const PORT = process.env.PORT || 1500;
 const SERVER = process.env.APP_NAME;
 /**
  * Drains the server on SIGTERM/SIGINT before exiting. Docker and Render both
  * send SIGTERM on stop/redeploy and Node's default is to die immediately,
- * dropping in-flight responses and live WebSocket sessions and leaving Mongo
+ * dropping in-flight responses and leaving Mongo
  * and Redis connections to time out server-side.
  *
  * NOTE: duplicates registerShutdown in @app/shared-config. The monolith cannot
@@ -95,17 +86,12 @@ const startServer = async () => {
     // Connect to Redis
     await connectRedis();
 
-    // Register Socket.IO handlers
-    registerSocketHandlers(io);
-
     server.listen(PORT, () => {
-      console.log(`🚀 Real-time messaging ${SERVER} running on port ${PORT}`);
-      console.log(`📡 Socket.IO server ready for connections`);
+      console.log(`🚀 ${SERVER} REST API running on port ${PORT}`);
       console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
     });
 
     registerShutdown(server, [
-      () => io.close(),
       () => mongoose.connection.close(),
       () => (redisClient.isOpen ? redisClient.quit() : Promise.resolve()),
     ]);
