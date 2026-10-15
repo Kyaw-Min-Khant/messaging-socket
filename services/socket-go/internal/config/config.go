@@ -1,5 +1,6 @@
-// Package config reads the same environment variables as the Node monolith
-// (src/config/*.ts) so both services can share one .env / Render env group.
+// Package config reads the same environment variables as chat-service
+// (services/chat-service/src/config/*.ts) so both can share one .env and
+// Render env group.
 package config
 
 import (
@@ -40,8 +41,8 @@ func Load() (*Config, error) {
 	env := os.Getenv("NODE_ENV")
 	dev := env == "development"
 
-	// Mirrors src/config/database.ts and src/config/redis.ts: development
-	// switches to the DEV_* values.
+	// Mirrors chat-service's config/database.ts and config/redis.ts:
+	// development switches to the DEV_* values.
 	pick := func(prod, devKey string) string {
 		if dev {
 			return os.Getenv(devKey)
@@ -62,7 +63,7 @@ func Load() (*Config, error) {
 		Firebase: FirebaseConfig{
 			ProjectID:    os.Getenv("FIREBASE_PROJECT_ID"),
 			PrivateKeyID: os.Getenv("FIREBASE_PRIVATE_KEY_ID"),
-			// Same as src/config/firebase.ts: env files carry literal "\n".
+			// Same as services/chat-service/src/config/firebase.ts: env files carry literal "\n".
 			PrivateKey:  strings.ReplaceAll(os.Getenv("FIREBASE_PRIVATE_KEY"), `\n`, "\n"),
 			ClientEmail: os.Getenv("FIREBASE_CLIENT_EMAIL"),
 			ClientID:    os.Getenv("FIREBASE_CLIENT_ID"),
@@ -82,7 +83,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// allowedOrigins is a port of getAllowedOrigins in src/config/cors.ts.
+// allowedOrigins is a port of getAllowedOrigins in services/chat-service/src/config/cors.ts.
 func allowedOrigins(clientURL string, dev bool) []string {
 	var out []string
 	seen := map[string]bool{}

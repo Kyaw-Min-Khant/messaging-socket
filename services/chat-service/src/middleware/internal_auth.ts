@@ -3,15 +3,15 @@ import { NextFunction, Request, Response } from "express";
 /**
  * Rejects requests that did not arrive through the gateway.
  *
- * The monolith is `type: web` on Render (private services are not on the free
+ * chat-service is `type: web` on Render (private services are not on the free
  * plan), so it has a public URL. This guard is what makes the gateway an
  * actual trust boundary rather than a convention. It authenticates the
  * *caller*, not the user — JWT verification still runs behind it.
  *
- * NOTE: duplicates createInternalAuthMiddleware in @app/shared-auth. The
- * monolith cannot import that package yet: its types.ts augments
+ * NOTE: duplicates createInternalAuthMiddleware in @app/shared-auth.
+ * chat-service cannot import that package yet: its types.ts augments
  * Express.Request.user with a shape incompatible with src/types/index.ts, and
- * the root Dockerfile does not copy packages/. Consolidate in Phase 3, once
+ * its Dockerfile does not copy packages/. Consolidate in Phase 3, once
  * the Request.user augmentations are unified.
  */
 export function createInternalOnly(internalSecret: string) {

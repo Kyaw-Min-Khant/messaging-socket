@@ -64,8 +64,8 @@ func newHandler(cfg *config.Config) (http.Handler, error) {
 		return nil, err
 	}
 	// Same timeout + error contract as expense: without it a cold or hung
-	// monolith holds the connection open on the path that carries auth.
-	monolith, err := proxy.New(cfg.MonolithURL, proxy.Options{
+	// chat-service holds the connection open on the path that carries auth.
+	chatService, err := proxy.New(cfg.ChatServiceURL, proxy.Options{
 		Name: "Server", Timeout: 30 * time.Second, InternalSecret: cfg.InternalSecret,
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func newHandler(cfg *config.Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health.Live)
 	mux.HandleFunc("GET /health/ready", health.Ready([]health.Upstream{
-		{Name: "monolith", URL: cfg.MonolithURL + "/v1/api/health"},
+		{Name: "chat-service", URL: cfg.ChatServiceURL + "/v1/api/health"},
 		{Name: "expense-service", URL: cfg.ExpenseURL + "/v1/api/health"},
 		{Name: "socket-go", URL: cfg.SocketURL + "/health"},
 	}))
@@ -101,15 +101,15 @@ func newHandler(cfg *config.Config) (http.Handler, error) {
 	mux.Handle("/v1/api/expenses/", general.Middleware(expense))
 
 	// Auth requests count against both limiters, as in the Node gateway.
-	authLimited := general.Middleware(auth.Middleware(monolith))
+	authLimited := general.Middleware(auth.Middleware(chatService))
 	for _, p := range []string{"/v1/api/auth/login", "/v1/api/auth/register"} {
 		mux.Handle(p, authLimited)
 		mux.Handle(p+"/", authLimited)
 	}
 
-	// Everything else still lives on the monolith until its own extraction
-	// phase cuts the relevant prefix over above this line.
-	mux.Handle("/v1/api/", general.Middleware(monolith))
+	// Everything else (auth, users, friends, chat history) is chat-service.
+	// A newly extracted service cuts its prefix over above this line.
+	mux.Handle("/v1/api/", general.Middleware(chatService))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

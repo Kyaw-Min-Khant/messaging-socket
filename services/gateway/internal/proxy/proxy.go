@@ -1,8 +1,7 @@
 // Package proxy is the gateway's routing targets. /v1/api/expenses goes to
-// expense-service and /socket.io to socket-go; everything else still proxies
-// to the original monolith, per the phased rollout. auth/user/messaging
-// services get their own entry here once each is extracted — this is the one
-// place that changes to cut traffic over (or roll it back).
+// expense-service, /socket.io to socket-go, and everything else to
+// chat-service. A newly extracted service gets its own entry here — this is
+// the one place that changes to cut traffic over (or roll it back).
 package proxy
 
 import (

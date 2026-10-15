@@ -1,5 +1,5 @@
-// Package config reads the gateway's environment — the same variables the
-// Node gateway used, so .env files, docker-compose and render.yaml are unchanged.
+// Package config reads the gateway's environment from .env files,
+// docker-compose and render.yaml.
 package config
 
 import (
@@ -13,7 +13,7 @@ type Config struct {
 	Port           string
 	Env            string
 	AllowedOrigins []string
-	MonolithURL    string
+	ChatServiceURL string
 	ExpenseURL     string
 	SocketURL      string
 	InternalSecret string
@@ -30,7 +30,7 @@ func Load() *Config {
 		Port:           orDefault(os.Getenv("PORT"), "4000"),
 		Env:            env,
 		AllowedOrigins: allowedOrigins(os.Getenv("CLIENT_URL"), env == "development"),
-		MonolithURL:    withScheme(os.Getenv("MONOLITH_URL"), "http://localhost:1500"),
+		ChatServiceURL: withScheme(os.Getenv("CHAT_SERVICE_URL"), "http://localhost:1500"),
 		ExpenseURL:     withScheme(os.Getenv("EXPENSE_SERVICE_URL"), "http://localhost:4004"),
 		SocketURL:      withScheme(os.Getenv("SOCKET_SERVICE_URL"), "http://localhost:1600"),
 		InternalSecret: os.Getenv("INTERNAL_SECRET"),

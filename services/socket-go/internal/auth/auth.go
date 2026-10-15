@@ -1,5 +1,5 @@
 // Package auth verifies the JWT on the Socket.IO handshake. It is a port of
-// the io.use middleware in src/socket/index.ts.
+// the io.use middleware in the former Node handler (src/socket/index.ts).
 package auth
 
 import (
@@ -17,7 +17,8 @@ var (
 	ErrInvalidToken = errors.New("Invalid token")
 )
 
-// Claims matches JwtPayload in src/types/index.ts, signed in src/models/User.ts.
+// Claims matches JwtPayload in chat-service's types/index.ts, signed in its
+// models/User.ts.
 type Claims struct {
 	UserID   string `json:"userId"`
 	Email    string `json:"email"`

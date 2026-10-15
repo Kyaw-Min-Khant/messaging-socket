@@ -1,310 +1,217 @@
-# Socket.IO API Documentation
+# Socket.IO API
+
+Real-time events are served by **socket-go** (`services/socket-go`, Go). Clients always connect through the **gateway**, which proxies `/socket.io` and adds the `X-Internal-Secret` header that socket-go requires.
+
+Event names and payload shapes are the client contract. The handlers live in `services/socket-go/internal/socket/handlers.go`.
 
 ## Connection
 
-Connect to the Socket.IO server:
-
 ```javascript
-const socket = io('http://localhost:1600'); // socket-go; use the gateway origin in production
+import { io } from 'socket.io-client';
+
+// Production: the gateway origin. Local dev with Vite: "/" (Vite proxies /socket.io).
+const socket = io('https://<gateway-host>', { withCredentials: true });
 ```
 
-## Events
+### Authentication
 
-### Client to Server Events
+The JWT is checked during the handshake, before the connection is accepted. socket-go reads it from:
 
-#### `authenticate`
-Authenticate user and join online users list.
+1. the `token` cookie set by `POST /v1/api/auth/login` (browsers, with `withCredentials: true`), or
+2. `handshake.auth.token` (mobile and other non-browser clients):
 
-**Payload:**
 ```javascript
-{
-  username: string,
-  userId?: string
-}
+const socket = io('https://<gateway-host>', { auth: { token: '<jwt>' } });
 ```
 
-**Example:**
+If both are present, the cookie wins. The token must be HS256, signed with `JWT_SECRET`, and contain `userId`.
+
+A rejected handshake arrives as `connect_error`:
+
+| `err.message` | Cause |
+|---|---|
+| `Authentication required` | No token in the cookie or `auth.token` |
+| `Invalid token` | Bad signature, expired, wrong algorithm, or no `userId` |
+
 ```javascript
-socket.emit('authenticate', { username: 'john_doe' });
+socket.on('connect_error', (err) => console.error(err.message));
 ```
 
-#### `sendDirectMessage`
-Send a direct message to a specific user.
+A connection made straight to socket-go (`:1600`), without the gateway, is refused with HTTP 403 whenever `INTERNAL_SECRET` is set.
 
-**Payload:**
-```javascript
-{
-  recipientId: string,
-  message: string,
-  conversationId?: string,
-  messageType?: string,
-  userId?: string
-}
-```
+### What happens on connect
 
-**Example:**
+- The socket joins a room named after the user's `userId`. Every tab and device of a user sits in that room, so events sent to the user reach all of them.
+- Redis: `HSET connectedUsers <socketId> <entry JSON>`.
+- MongoDB: the user's `isOnline` is set to `true` and `lastSeen` to now.
+
+No event is broadcast on connect. `userOnline` is only sent when the client emits `authenticate` (see below).
+
+## Client → server events
+
+### `sendDirectMessage`
+
+Saves a direct message and delivers it.
+
 ```javascript
 socket.emit('sendDirectMessage', {
-  recipientId: 'user123',
-  message: 'Hello! How are you?',
-  messageType: 'text'
+  recipientId: '665f1c…',   // required, Mongo User _id
+  message: 'Hello!',        // required, 1–1000 characters after trimming
+  messageType: 'text',      // optional, default "text"
 });
 ```
 
-#### `typing`
-Send typing indicator to recipient.
+Server behaviour:
 
-**Payload:**
+1. Finds the conversation between sender and recipient, or creates it.
+2. Inserts the message with status `sent`.
+3. If the recipient has any connected socket, emits `newDirectMessage` to them (status `delivered`) and updates the stored status to `delivered`.
+4. Emits `messageSent` back to the sender.
+5. If the recipient is offline and has an FCM token, sends a push notification.
+
+Only `text` works over the socket. `image`, `audio` and `file` require a `fileUrl`, which this event cannot carry, so they fail validation with `error`.
+
+Errors (emitted as `error`): `Invalid recipient` when `recipientId` is missing or empty, and `Failed to send message` for validation or database failures.
+
+### `typing`
+
+Relays a typing indicator. Nothing is stored.
+
+```javascript
+socket.emit('typing', { recipientId: '665f1c…', isTyping: true });
+```
+
+The recipient receives `userTyping`. A missing `recipientId` returns `error` `Invalid recipient`.
+
+### `markAsRead`
+
+Marks a message as seen.
+
+```javascript
+socket.emit('markAsRead', { messageId: '6660aa…', senderId: '665f1c…' });
+```
+
+The message's `status` becomes `seen`, and `seenAt` is set. If `senderId` is given, the original sender receives `messageRead`. Failures are logged on the server; no `error` is sent to the client.
+
+### `authenticate` (legacy)
+
+Kept for older clients. The payload is ignored, because identity comes from the handshake.
+
+```javascript
+socket.emit('authenticate');
+```
+
+The caller receives `authenticated`, and every other connected socket receives `userOnline`.
+
+## Server → client events
+
+### `authenticated`
+
+Reply to `authenticate`.
+
+```javascript
+{ user: { id: string, username: string } }
+```
+
+### `messageSent`
+
+Sent to the sender after the message is saved.
+
 ```javascript
 {
-  recipientId: string,
-  isTyping: boolean
-}
-```
-
-**Example:**
-```javascript
-socket.emit('typing', { recipientId: 'user123', isTyping: true });
-```
-
-#### `markAsRead`
-Mark a message as read.
-
-**Payload:**
-```javascript
-{
-  messageId: string,
-  senderId: string
-}
-```
-
-**Example:**
-```javascript
-socket.emit('markAsRead', {
-  messageId: 'msg123',
-  senderId: 'user123'
-});
-```
-
-### Server to Client Events
-
-#### `authenticated`
-Confirmation of successful authentication.
-
-**Payload:**
-```javascript
-{
-  user: {
-    id: string,
-    username: string
-  },
-  onlineUsers: [
-    {
-      id: string,
-      username: string,
-      isOnline: boolean,
-      socketId: string
-    }
-  ]
-}
-```
-
-**Example:**
-```javascript
-socket.on('authenticated', (data) => {
-  console.log('Authenticated as:', data.user.username);
-  console.log('Online users:', data.onlineUsers);
-});
-```
-
-#### `newDirectMessage`
-New message received.
-
-**Payload:**
-```javascript
-{
-  id: string,
-  senderId: string,
-  senderUsername: string,
-  recipientId: string,
+  _id: string,             // message id
   conversationId: string,
-  message: string,
-  messageType: string,
-  timestamp: string,
-  status: string
-}
-```
-
-**Example:**
-```javascript
-socket.on('newDirectMessage', (message) => {
-  console.log(`New message from ${message.senderUsername}:`, message.message);
-});
-```
-
-#### `userOnline`
-User came online.
-
-**Payload:**
-```javascript
-{
-  id: string,
-  username: string,
-  isOnline: boolean
-}
-```
-
-**Example:**
-```javascript
-socket.on('userOnline', (user) => {
-  console.log(`${user.username} is now online`);
-});
-```
-
-#### `userOffline`
-User went offline.
-
-**Payload:**
-```javascript
-{
-  id: string,
-  username: string,
-  isOnline: boolean,
-  lastSeen: string
-}
-```
-
-**Example:**
-```javascript
-socket.on('userOffline', (user) => {
-  console.log(`${user.username} is now offline`);
-});
-```
-
-#### `userTyping`
-User is typing.
-
-**Payload:**
-```javascript
-{
   senderId: string,
   senderUsername: string,
-  isTyping: boolean
+  recipientId: string,
+  message: string,         // the text as sent (untrimmed)
+  messageType: string,
+  timestamp: string,       // ISO 8601, e.g. "2026-10-15T08:30:00.000Z"
+  status: 'sent'
 }
 ```
 
-**Example:**
-```javascript
-socket.on('userTyping', (data) => {
-  if (data.isTyping) {
-    console.log(`${data.senderUsername} is typing...`);
-  }
-});
-```
+### `newDirectMessage`
 
-#### `messageRead`
-Message was read.
+Sent to every socket of an online recipient. Same shape as `messageSent`, with `status: 'delivered'`.
 
-**Payload:**
-```javascript
-{
-  messageId: string,
-  readBy: string,
-  readAt: string
-}
-```
-
-**Example:**
-```javascript
-socket.on('messageRead', (data) => {
-  console.log(`Message ${data.messageId} was read at ${data.readAt}`);
-});
-```
-
-#### `error`
-Error occurred.
-
-**Payload:**
-```javascript
-{
-  message: string
-}
-```
-
-**Example:**
-```javascript
-socket.on('error', (error) => {
-  console.error('Socket error:', error.message);
-});
-```
-
-## Complete Example
+### `userTyping`
 
 ```javascript
-const socket = io('http://localhost:1600'); // socket-go; use the gateway origin in production
-
-// Authenticate
-socket.emit('authenticate', { username: 'john_doe' });
-
-// Listen for authentication
-socket.on('authenticated', (data) => {
-  console.log('Authenticated as:', data.user.username);
-  
-  // Select a user to chat with
-  const recipient = data.onlineUsers[0];
-  if (recipient) {
-    // Send a message
-    socket.emit('sendDirectMessage', {
-      recipientId: recipient.id,
-      message: 'Hello!'
-    });
-  }
-});
-
-// Listen for new messages
-socket.on('newDirectMessage', (message) => {
-  console.log(`Message from ${message.senderUsername}:`, message.message);
-});
-
-// Listen for user status changes
-socket.on('userOnline', (user) => {
-  console.log(`${user.username} came online`);
-});
-
-socket.on('userOffline', (user) => {
-  console.log(`${user.username} went offline`);
-});
-
-// Handle errors
-socket.on('error', (error) => {
-  console.error('Socket error:', error.message);
-});
+{ senderId: string, senderUsername: string, isTyping: boolean }
 ```
 
-## Message Types
+### `messageRead`
 
-- `text` - Plain text message (default)
-- `image` - Image message
-- `audio` - Audio message
-- `file` - File message
-
-## Status Values
-
-- `sent` - Message sent to server
-- `delivered` - Message delivered to recipient
-- `read` - Message read by recipient
-
-## Error Handling
-
-Always listen for the `error` event to handle any socket errors:
+Sent to the original sender after the recipient emits `markAsRead`.
 
 ```javascript
-socket.on('error', (error) => {
-  console.error('Socket error:', error.message);
-  // Handle error appropriately
-});
+{ messageId: string, readBy: string, readAt: string }
 ```
 
-## Disconnection
+### `userOnline`
 
-The socket will automatically handle disconnection and cleanup. Users will be marked as offline when they disconnect. 
+Broadcast to everyone except the caller when a client emits `authenticate`.
+
+```javascript
+{ id: string, username: string, isOnline: true }
+```
+
+### `userOffline`
+
+Broadcast when a user's **last** socket disconnects. Closing one of several tabs does not trigger it.
+
+```javascript
+{ id: string, username: string, isOnline: false, lastSeen: string }
+```
+
+On that last disconnect, MongoDB `isOnline` is set to `false` and `lastSeen` is updated. Each disconnecting socket is also removed from the Redis `connectedUsers` hash.
+
+### `error`
+
+```javascript
+{ message: string }   // "Invalid recipient" | "Failed to send message"
+```
+
+## Message status
+
+| Status | Set when |
+|---|---|
+| `sent` | The message is saved |
+| `delivered` | The recipient was online when it was sent |
+| `seen` | The recipient emitted `markAsRead` |
+
+A message sent while the recipient is offline stays `sent` until it is marked `seen`.
+
+## Message types
+
+`text` (default), `image`, `audio`, `file`. Only `text` can be sent over the socket; see `sendDirectMessage`.
+
+## Complete example
+
+```javascript
+import { io } from 'socket.io-client';
+
+const socket = io('/', { withCredentials: true });   // cookie from /v1/api/auth/login
+
+socket.on('connect_error', (err) => console.error('Auth failed:', err.message));
+socket.on('error', (err) => console.error('Socket error:', err.message));
+
+socket.on('connect', () => {
+  socket.emit('sendDirectMessage', { recipientId: friendId, message: 'Hello!' });
+});
+
+socket.on('messageSent', (msg) => console.log('Saved', msg._id, msg.status));
+
+socket.on('newDirectMessage', (msg) => {
+  console.log(`${msg.senderUsername}: ${msg.message}`);
+  socket.emit('markAsRead', { messageId: msg._id, senderId: msg.senderId });
+});
+
+socket.on('userTyping', ({ senderUsername, isTyping }) => {
+  if (isTyping) console.log(`${senderUsername} is typing…`);
+});
+
+socket.on('messageRead', ({ messageId, readAt }) => console.log(messageId, 'seen at', readAt));
+socket.on('userOffline', ({ username }) => console.log(`${username} went offline`));
+```

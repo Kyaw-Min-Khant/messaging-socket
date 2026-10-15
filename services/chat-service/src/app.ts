@@ -1,3 +1,4 @@
+import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -67,7 +68,9 @@ const options = {
       version: "1.0.0",
     },
   },
-  apis: ["./src/routes/*.ts"],
+  // Resolved from this file, not the cwd, so it works from src/ (dev) and
+  // dist/ (prod). Always the .ts sources: tsc's removeComments strips JSDoc.
+  apis: [path.resolve(__dirname, "../src/routes/*.ts")],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

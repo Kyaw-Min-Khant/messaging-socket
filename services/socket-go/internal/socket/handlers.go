@@ -1,5 +1,5 @@
 // Package socket registers the Socket.IO event handlers. It is a port of
-// src/socket/index.ts; event names and payload shapes are the client contract
+// the former Node handler (src/socket/index.ts); event names and payload shapes are the client contract
 // (see docs/socket-api.md) and must not change.
 package socket
 

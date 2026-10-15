@@ -35,12 +35,12 @@ services:
       - backend
     restart: unless-stopped
 
-  # ── Monolith — auth, messaging, users (internal only — no public port) ─────
-  monolith:
+  # ── Chat service — auth, users, friends, chat history (internal only) ─────
+  chat-service:
     build:
       context: .
-      dockerfile: Dockerfile
-    env_file: .env
+      dockerfile: services/chat-service/Dockerfile
+    env_file: services/chat-service/.env
     environment:
       NODE_ENV: production
       PORT: 1500
@@ -56,8 +56,8 @@ services:
     build:
       context: .
       dockerfile: services/socket-go/Dockerfile
-    # Same Mongo/Redis/JWT/Firebase settings as the monolith
-    env_file: .env
+    # Same Mongo/Redis/JWT/Firebase settings as chat-service
+    env_file: services/chat-service/.env
     environment:
       NODE_ENV: production
       PORT: 1600
@@ -75,14 +75,14 @@ services:
     environment:
       NODE_ENV: production
       # Docker service names resolve to internal IPs — no public URLs needed
-      MONOLITH_URL: http://monolith:1500
+      CHAT_SERVICE_URL: http://chat-service:1500
       SOCKET_SERVICE_URL: http://socket-go:1600
       EXPENSE_SERVICE_URL: http://expense-service:4004
       INTERNAL_SECRET: ${INTERNAL_SECRET:-local-dev-internal-secret}
     ports:
       - "80:4000"   # server port 80 → gateway port 4000
     depends_on:
-      - monolith
+      - chat-service
       - socket-go
       - expense-service
     networks:

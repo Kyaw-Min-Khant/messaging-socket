@@ -1,6 +1,6 @@
 # Messaging Platform
 
-Real-time messaging (friends, DMs, Socket.IO, FCM) plus a daily expense tracker. One public origin — the **gateway** — fronts the monolith (auth, users, chat) and expense-service (Postgres). The React client never talks to a backend directly.
+Real-time messaging (friends, DMs, Socket.IO, FCM) plus a daily expense tracker. One public origin — the **gateway** — fronts chat-service (auth, users, chat history), socket-go (real-time) and expense-service (Postgres). The React client never talks to a backend directly.
 
 ---
 
@@ -15,6 +15,8 @@ Real-time messaging (friends, DMs, Socket.IO, FCM) plus a daily expense tracker.
 7. [Environment](#environment)
 8. [Deployment](#deployment)
 
+More detail: [Socket.IO API](docs/socket-api.md) · [Data model](docs/Messaging%20Socket%20Data%20Model.md)
+
 ---
 
 ## System topology
@@ -24,15 +26,16 @@ Browser  (Vite :3000 / Vercel)
    │  REST  /v1/api/*     +     WebSocket  /socket.io
    ▼
 Gateway  (:4000)                         ← only public origin
-   │  stamps x-internal-secret
-   │  rate-limits /v1/api and /auth/login|register
+   │  CORS, security headers, gzip, access log
+   │  stamps X-Internal-Secret
+   │  rate-limits /v1/api (100/min per IP), plus /auth/login|register (50 / 30 min)
    │
    ├── /v1/api/expenses/**  →  Expense service (:4004)  →  PostgreSQL
-   ├── /v1/api/**           →  Monolith (:1500)         →  MongoDB + Redis + FCM
+   ├── /v1/api/**           →  chat-service (:1500)     →  MongoDB + Redis + FCM
    └── /socket.io           →  socket-go (:1600, Go)    →  MongoDB + Redis + FCM
 ```
 
-`INTERNAL_SECRET` is what makes the gateway a trust boundary. Monolith and expense-service are public URLs on Render (private services are not on the free plan), so they reject any request that is missing that header with `403 {"success":false,"error":"Forbidden."}`.
+`INTERNAL_SECRET` is what makes the gateway a trust boundary. chat-service, socket-go and expense-service are public URLs on Render (private services are not on the free plan), so they reject any request that is missing that header with `403 {"success":false,"error":"Forbidden."}`.
 
 Locally, Vite proxies `/v1/api` and `/socket.io` to the gateway (`VITE_API_PROXY_TARGET=http://localhost:4000`). In production the client sets `VITE_API_URL` to the gateway’s `/v1/api`.
 
@@ -46,10 +49,10 @@ Locally, Vite proxies `/v1/api` and `/socket.io` to the gateway (`VITE_API_PROXY
 POST /v1/api/auth/login  { email, password }
         │
         ▼
-Gateway  authLimiter (10 / 15 min) → proxy + x-internal-secret
+Gateway  general limiter (100/min) + auth limiter (50 / 30 min) per IP → proxy + X-Internal-Secret
         │
         ▼
-Monolith  auth_service
+chat-service  auth_service
    1. User.findOne({ email })          MongoDB
    2. bcrypt.compare
    3. jwt.sign({ userId, username, email }, JWT_SECRET, 15d)
@@ -67,7 +70,7 @@ Local HTTP uses `SameSite=Lax`. Deployed (`NODE_ENV=production` or `golive`) use
 GET /v1/api/users   Cookie: token=<jwt>
         │
         ▼
-Gateway → monolith
+Gateway → chat-service
         │
         ▼
 auth middleware
@@ -96,7 +99,7 @@ expense-service
 controller → Prisma → PostgreSQL
 ```
 
-Both services share `JWT_SECRET`. Expense-service never calls the monolith to resolve a user.
+Both services share `JWT_SECRET`. Expense-service never calls chat-service to resolve a user.
 
 ### Socket.IO
 
@@ -107,41 +110,49 @@ io('/', { withCredentials: true })
 Gateway /socket.io  (HTTP poll, then WS upgrade — both stamped)
         │
         ▼
-Monolith handshake
-   cookie token or handshake.auth.token → jwt.verify
-   Redis HSET connectedUsers / userSockets
+socket-go handshake
+   X-Internal-Secret check (403 without it)
+   cookie token or handshake.auth.token → JWT verify (HS256)
+   join room <userId>       (every tab/device of a user)
+   Redis HSET connectedUsers
    MongoDB isOnline = true
         │
-        ├── sendDirectMessage → persist → emit or FCM if offline
+        ├── sendDirectMessage → persist → emit to recipient's room, or FCM if offline
         ├── typing / markAsRead
-        └── disconnect → clear Redis + lastSeen
+        └── disconnect → clear Redis; isOnline=false + lastSeen once the last socket closes
 ```
+
+Events and payloads: [docs/socket-api.md](docs/socket-api.md).
 
 ---
 
 ## Repository layout
 
 ```
-src/                          Monolith — auth, users, conversations, Socket.IO
-  app.ts                      Express app + internal-secret guard
-  index.ts                    HTTP + Socket.IO, env check, graceful shutdown
-  controllers/                auth, users, messages
-  middleware/                 JWT+Redis auth, internal_auth, errors
-  models/                     Mongoose: User, Message, Conversation, Friend
-  routes/                     /auth, /users, /conversations
-  services/                   auth, users, messages, FCM
-  socket/                     real-time handlers
-  config/                     cors, mongo, redis, firebase, validateEnv
-
 services/
+  chat-service/               auth, users, friends, chat history (Express + Mongoose)
+    src/app.ts                Express app + internal-secret guard
+    src/index.ts              HTTP server, env check, graceful shutdown
+    src/controllers/          auth, users, messages
+    src/middleware/           JWT+Redis auth, internal_auth, errors
+    src/models/               Mongoose: User, Message, Conversation, Friend
+    src/routes/               /auth, /users, /conversations
+    src/services/             auth, users, messages, FCM
+    src/config/               cors, mongo, redis, firebase, validateEnv
   gateway/                    Public entry in Go — CORS, rate limit, security headers, proxies
-    cmd/server/main.go        routes + middleware, graceful shutdown
+    cmd/server/main.go        routes + middleware chain, graceful shutdown
+    internal/config/          env vars (adds http:// to Render host:port values)
     internal/proxy/           expense → :4004, /socket.io → :1600, everything else → :1500
-    internal/middleware/      CORS, rate limiter, helmet-style headers, access log
-  socket-go/                  Socket.IO server in Go (replaces src/socket)
-    cmd/server/main.go        HTTP server, CORS, internal-secret, /health, shutdown
-    internal/socket/          event handlers (same events + payloads as before)
+    internal/middleware/      CORS, rate limiter, helmet-style headers, access log, client IP
+    internal/health/          /health (liveness), /health/ready (probes upstreams)
+  socket-go/                  Socket.IO server in Go (replaced the Node socket server)
+    cmd/server/main.go        connects Mongo/Redis/FCM, internal-secret check, /health, shutdown
+    internal/config/          env vars (same names as chat-service)
     internal/auth/            JWT from `token` cookie or handshake.auth.token
+    internal/socket/          event handlers (see docs/socket-api.md)
+    internal/store/           MongoDB writes, Mongoose-compatible documents
+    internal/presence/        Redis `connectedUsers` hash
+    internal/push/            FCM notifications (no-op when Firebase is not configured)
   expense-service/            Expense tracker (Express + Prisma)
     prisma/schema.prisma
     prisma/seed.ts
@@ -174,7 +185,7 @@ Interactive docs (no auth required to *view*):
 |---|---|
 | Swagger UI | http://localhost:4004/api-docs |
 | OpenAPI JSON | http://localhost:4004/api-docs.json |
-| Monolith Swagger | http://localhost:1500/api-docs |
+| chat-service Swagger | http://localhost:1500/api-docs |
 
 In Swagger UI pick the **Local gateway** server, then **Authorize** with the JWT from the `token` cookie (`POST /v1/api/auth/login` on the gateway). Trying the expense-service host directly returns 403 when `INTERNAL_SECRET` is set.
 
@@ -200,7 +211,7 @@ In Swagger UI pick the **Local gateway** server, then **Authorize** with the JWT
 
 Creating or updating an expense may include `budgetWarnings` when a touched budget is at least 80% used.
 
-### Monolith routes (also via the gateway)
+### chat-service routes (also via the gateway)
 
 | Method | Path | Auth | |
 |--------|------|------|--|
@@ -218,13 +229,13 @@ Creating or updating an expense may include `budgetWarnings` when a touched budg
 | GET | `/v1/api/conversations/:friend_id/messages` | ✓ | History |
 | GET | `/v1/api/health` | — | Mongo + Redis |
 | GET | `/health` | — | Gateway liveness |
-| GET | `/health/ready` | — | Gateway + both upstreams |
+| GET | `/health/ready` | — | Gateway readiness: probes chat-service, expense-service and socket-go |
 
 ---
 
 ## Data stores
 
-**MongoDB (monolith)** — `User`, `Message`, `Conversation` (2 participants), `Friend` (`pending` / `accepted` / `rejected`).
+**MongoDB (chat-service, socket-go)** — `User`, `Message`, `Conversation` (2 participants), `Friend` (`pending` / `accepted` / `blocked`).
 
 **PostgreSQL (expense-service)**
 
@@ -238,25 +249,24 @@ Creating or updating an expense may include `budgetWarnings` when a touched budg
 
 Amounts are `Decimal(12,2)`, serialized as `"5000.00"`. Payment methods: `CASH`, `KBZ_PAY`, `AYA_PAY`, `ONLINE_PAYMENT`.
 
-**Redis (monolith)** — `user:{id}` (60s profile cache), `connectedUsers` and `userSockets` hashes for presence.
+**Redis** — `user:{id}` (60s profile cache, chat-service), `connectedUsers` hash for presence (socket-go).
 
 ---
 
 ## Getting started
 
-Need four processes: monolith `:1500`, gateway `:4000`, expense-service `:4004`, client `:3000`.
+Need five processes: chat-service `:1500`, socket-go `:1600`, gateway `:4000`, expense-service `:4004`, client `:3000`.
 
 ```bash
-# root — monolith
-cp .env.example .env          # JWT_SECRET, INTERNAL_SECRET, Mongo, Redis, …
-npm install
-npm run dev                   # :1500
-
-# gateway + expense-service (from repo root)
+# env files (from repo root) — JWT_SECRET and INTERNAL_SECRET must match in all of them
+cp services/chat-service/.env.example services/chat-service/.env   # Mongo, Redis, Firebase, …
 cp services/gateway/.env.example services/gateway/.env
 cp services/expense-service/.env.example services/expense-service/.env
-# INTERNAL_SECRET and JWT_SECRET must match the monolith
-npm run dev:services          # gateway :4000 (go run, needs Go 1.26+) + expense :4004
+cp services/socket-go/.env.example services/socket-go/.env       # same Mongo/Redis/JWT/Firebase values as chat-service
+
+# all backends at once (Go 1.26+ for gateway and socket-go)
+npm install
+npm run dev:services          # chat :1500 + socket-go :1600 + gateway :4000 + expense :4004
 
 cd services/expense-service
 npm run prisma:migrate
@@ -273,13 +283,20 @@ npm run dev                   # :3000
 
 Then open http://localhost:3000 and http://localhost:4004/api-docs.
 
+Go tests:
+
+```bash
+cd services/gateway && go test ./...
+cd services/socket-go && go test ./...
+```
+
 Docker (gateway on host port 80):
 
 ```bash
 docker compose up -d --build
 ```
 
-`client` is not in the compose file — still run Vite, and point the proxy at `http://localhost` (port 80) if you use that stack.
+In Docker, socket-go reads `services/chat-service/.env`. `client` is not in the compose file — still run Vite, and point the proxy at `http://localhost` (port 80) if you use that stack.
 
 ---
 
@@ -290,10 +307,10 @@ Shared across services:
 | Variable | Who | Notes |
 |----------|-----|--------|
 | `JWT_SECRET` | all backends | Must be identical |
-| `INTERNAL_SECRET` | gateway + monolith + expense | Must be identical. Leave empty on the monolith only if Vite talks to `:1500` directly |
+| `INTERNAL_SECRET` | gateway + chat-service + socket-go + expense | Must be identical. Leave empty on a backend only if Vite talks to it directly |
 | `CLIENT_URL` | gateway (and backends for CORS) | Comma-separated origins |
 
-Monolith also needs `MONGODB_URI` (or `DEV_MONGODB_URI`), Redis (`REDIS_URL` / `DEV_REDIS_*`), and Firebase Admin keys in non-dev. Expense-service needs `DATABASE_URL`. Gateway needs `MONOLITH_URL`, `EXPENSE_SERVICE_URL` and `SOCKET_SERVICE_URL`; `TRUST_PROXY_HOPS` (default `1`, Render's edge) sets how many proxies' `X-Forwarded-For` entries to trust for rate limiting.
+chat-service and socket-go also need `MONGODB_URI` (or `DEV_MONGODB_URI`), Redis (`REDIS_URL` / `DEV_REDIS_*`), and Firebase Admin keys in non-dev. Expense-service needs `DATABASE_URL`. Gateway needs `CHAT_SERVICE_URL`, `EXPENSE_SERVICE_URL` and `SOCKET_SERVICE_URL`; `TRUST_PROXY_HOPS` (default `1`, Render's edge) sets how many proxies' `X-Forwarded-For` entries to trust for rate limiting.
 
 Client: `VITE_API_PROXY_TARGET` / `VITE_EXPENSE_API_PROXY_TARGET` (local) or `VITE_API_URL` (production gateway). Firebase web keys for push.
 
@@ -301,11 +318,11 @@ Client: `VITE_API_PROXY_TARGET` / `VITE_EXPENSE_API_PROXY_TARGET` (local) or `VI
 
 ## Deployment
 
-`render.yaml` Blueprint: **gateway** (public), **monolith**, **expense-service**. Downstream URLs come from `fromService.hostport`; the gateway adds `http://`. Health: gateway `/health`, monolith `/v1/api/health`, expense `/v1/api/health`.
+`render.yaml` Blueprint: **gateway** (public), **chat-service**, **socket-go**, **expense-service**. Downstream URLs come from `fromService.hostport`; the gateway adds `http://`. Health: gateway `/health`, chat-service `/v1/api/health`, socket-go `/health`, expense `/v1/api/health`.
 
 Expense-service start: `npx prisma migrate deploy && npm start`.
 
-The Vercel client should set `VITE_API_URL` to `https://<gateway>/v1/api` — never to the monolith or expense-service.
+The Vercel client should set `VITE_API_URL` to `https://<gateway>/v1/api` — never to chat-service, socket-go or expense-service.
 
 ---
 

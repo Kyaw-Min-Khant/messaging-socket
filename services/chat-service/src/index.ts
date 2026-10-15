@@ -35,8 +35,8 @@ const SERVER = process.env.APP_NAME;
  * dropping in-flight responses and leaving Mongo
  * and Redis connections to time out server-side.
  *
- * NOTE: duplicates registerShutdown in @app/shared-config. The monolith cannot
- * import that package yet — the root Dockerfile does not copy packages/ into
+ * NOTE: duplicates registerShutdown in @app/shared-config. chat-service cannot
+ * import that package yet — its Dockerfile does not copy packages/ into
  * the image (Phase 2.4). Consolidate once it does.
  */
 function registerShutdown(
