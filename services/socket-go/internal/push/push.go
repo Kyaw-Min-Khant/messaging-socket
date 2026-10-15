@@ -30,7 +30,7 @@ type FCM struct {
 	client *messaging.Client
 }
 
-// NewFCM builds the same service account JSON as src/config/firebase.ts.
+// NewFCM builds the same service account JSON as services/chat-service/src/config/firebase.ts.
 func NewFCM(ctx context.Context, fb config.FirebaseConfig) (*FCM, error) {
 	creds, err := json.Marshal(map[string]string{
 		"type":                        "service_account",

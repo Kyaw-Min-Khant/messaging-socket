@@ -7,10 +7,10 @@ import (
 
 func TestWithScheme(t *testing.T) {
 	cases := []struct{ in, fallback, want string }{
-		{"monolith:1500", "", "http://monolith:1500"},             // Render hostport
-		{"http://monolith:1500", "", "http://monolith:1500"},      // docker-compose
-		{"HTTPS://api.example.com", "", "HTTPS://api.example.com"}, // scheme check is case-insensitive
-		{"  ", "http://localhost:4004", "http://localhost:4004"},   // blank → fallback
+		{"chat-service:1500", "", "http://chat-service:1500"},        // Render hostport
+		{"http://chat-service:1500", "", "http://chat-service:1500"}, // docker-compose
+		{"HTTPS://api.example.com", "", "HTTPS://api.example.com"},   // scheme check is case-insensitive
+		{"  ", "http://localhost:4004", "http://localhost:4004"},     // blank → fallback
 		{"", "localhost:1600", "http://localhost:1600"},
 	}
 	for _, c := range cases {

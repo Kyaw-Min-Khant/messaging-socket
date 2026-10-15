@@ -1,6 +1,6 @@
 # Messaging Socket Data Model
 
-The app keeps data in three stores. The monolith owns users, chat and friends in MongoDB. The expense service owns money data in PostgreSQL. Redis holds short-lived presence and auth cache. The stores share one key: the Mongo `User._id`, which Postgres stores as a plain `user_id` string with no foreign key.
+The app keeps data in three stores. chat-service (REST) and socket-go (real-time) own users, chat and friends in MongoDB. The expense service owns money data in PostgreSQL. Redis holds short-lived presence and auth cache. The stores share one key: the Mongo `User._id`, which Postgres stores as a plain `user_id` string with no foreign key.
 
 ## How the stores connect
 
@@ -8,16 +8,19 @@ The app keeps data in three stores. The monolith owns users, chat and friends in
 flowchart LR
   C[Client :3000] --> G[Gateway]
   G -->|/v1/api/expenses/**| E[expense-service :4004]
-  G -->|everything else + socket.io| M[Monolith :1500]
-  M --> MG[(MongoDBusers, chat, friends)]
-  M --> R[(Redispresence, auth cache)]
-  E --> PG[(PostgreSQLexpenses, budgets, income)]
+  G -->|everything else| M[chat-service :1500]
+  G -->|/socket.io| S[socket-go :1600]
+  M --> MG[(MongoDB<br/>users, chat, friends)]
+  M --> R[(Redis<br/>presence, auth cache)]
+  S --> MG
+  S --> R
+  E --> PG[(PostgreSQL<br/>expenses, budgets, income)]
   PG -. "user_id = User._id (JWT userId)" .-> MG
 ```
 
 ## MongoDB
 
-Mongoosesrc/models/\*.ts
+Schemas: Mongoose models in `services/chat-service/src/models/*.ts`. socket-go (`services/socket-go/internal/store`) writes the same `users`, `conversations` and `messages` collections directly with the Go driver, keeping documents in the shape Mongoose expects (`createdAt`, `updatedAt`, `__v`).
 
 ```mermaid
 erDiagram
@@ -96,13 +99,13 @@ erDiagram
 ### Rules in code
 
 - **Conversation** pre-save rejects anything but 2 unique participants
-- **Conversation** findOrCreateConversation sorts the 2 ids so lookup is stable
+- **Conversation** chat-service's findOrCreateConversation sorts the 2 ids before saving. socket-go saves them as [sender, recipient]. Both look up with `$all`, so order doesn't affect lookup
 - **User** pre-save hashes password (bcrypt, cost 12)
 - **User** JWT payload: userId, email, username
 
 ## PostgreSQL
 
-Prismaservices/expense-service/prisma/schema.prisma
+Schema: Prisma, `services/expense-service/prisma/schema.prisma`.
 
 ```mermaid
 erDiagram
@@ -187,19 +190,15 @@ erDiagram
 
 ## Redis
 
-node-redissrc/socket/index.ts, src/middleware/auth.ts
+Clients: node-redis in `services/chat-service/src/middleware/auth.ts`, go-redis in `services/socket-go/internal/presence`.
 
 ### connectedUsers
 
-- **hash** socket.id → user entry JSON. Set on connect, removed on disconnect.
-
-### userSockets
-
-- **hash** userId → socket.id. Used to route private messages and read receipts.
+- **hash** socket.id → user entry JSON (`id`, `userId`, `username`, `socketId`, `isOnline`, `lastSeen`). Written by socket-go: set on connect, removed on disconnect.
 
 ### user:{userId}
 
-- **string** cached user for the auth middleware, with expiry. Deleted when the user changes.
+- **string** cached user for chat-service's auth middleware, 60 s expiry. Deleted when the user changes.
 
 ## Things the schema doesn't enforce
 
@@ -211,4 +210,6 @@ node-redissrc/socket/index.ts, src/middleware/auth.ts
 
 **No cross-database cleanup.** Deleting a Mongo user leaves their Postgres rows behind, because `user_id` is not a real foreign key.
 
-**One socket per user.** `userSockets` stores a single socket.id, so a second tab or device replaces the first.
+**Conversation summary fields are never written.** Nothing sets `Conversation.lastMessage` or `unreadCount` (socket-go creates conversations with an empty `unreadCount`), and `Message.deliveredAt` is never set when the status changes to `delivered`.
+
+Messages are routed per user, not per socket: socket-go puts every socket of a user in a room named after the `userId`, so several tabs and devices all receive events. Redis is not used for routing.

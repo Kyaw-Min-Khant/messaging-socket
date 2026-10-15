@@ -35,13 +35,13 @@ func (r *recorder) count() int {
 }
 
 func TestRouting(t *testing.T) {
-	monolith, expense, socket := newRecorder(), newRecorder(), newRecorder()
-	defer monolith.srv.Close()
+	chatService, expense, socket := newRecorder(), newRecorder(), newRecorder()
+	defer chatService.srv.Close()
 	defer expense.srv.Close()
 	defer socket.srv.Close()
 
 	h, err := newHandler(&config.Config{
-		MonolithURL: monolith.srv.URL, ExpenseURL: expense.srv.URL, SocketURL: socket.srv.URL,
+		ChatServiceURL: chatService.srv.URL, ExpenseURL: expense.srv.URL, SocketURL: socket.srv.URL,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -58,9 +58,9 @@ func TestRouting(t *testing.T) {
 	}{
 		{"/v1/api/expenses", expense},
 		{"/v1/api/expenses/budgets/1", expense},
-		{"/v1/api/expensesX", monolith}, // prefix match is per path segment
-		{"/v1/api/users/friends", monolith},
-		{"/v1/api/auth/login", monolith},
+		{"/v1/api/expensesX", chatService}, // prefix match is per path segment
+		{"/v1/api/users/friends", chatService},
+		{"/v1/api/auth/login", chatService},
 		{"/socket.io/?EIO=4&transport=polling", socket},
 	}
 	for _, c := range cases {
@@ -84,7 +84,7 @@ func TestRouting(t *testing.T) {
 func TestRateLimitScopes(t *testing.T) {
 	up := newRecorder()
 	defer up.srv.Close()
-	h, _ := newHandler(&config.Config{MonolithURL: up.srv.URL, ExpenseURL: up.srv.URL, SocketURL: up.srv.URL})
+	h, _ := newHandler(&config.Config{ChatServiceURL: up.srv.URL, ExpenseURL: up.srv.URL, SocketURL: up.srv.URL})
 	get := func(path string) int {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))

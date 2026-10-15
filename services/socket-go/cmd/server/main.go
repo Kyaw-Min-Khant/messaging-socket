@@ -1,5 +1,5 @@
 // Command server is the Socket.IO service for real-time messaging. It replaces
-// the socket part of the Node monolith; the REST API stays in Node.
+// the old Node socket server; the REST API lives in chat-service.
 package main
 
 import (
@@ -103,7 +103,7 @@ func main() {
 }
 
 // shutdown drains on SIGTERM/SIGINT with a 10s limit, like registerShutdown in
-// the Node monolith.
+// chat-service.
 func shutdown(srv *http.Server, io *sio.Server, st *store.Store, pr *presence.Presence) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)

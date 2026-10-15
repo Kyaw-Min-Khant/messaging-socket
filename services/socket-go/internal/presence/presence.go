@@ -1,5 +1,5 @@
-// Package presence keeps the Redis "connectedUsers" hash that the Node
-// service maintained (src/socket/index.ts).
+// Package presence keeps the Redis "connectedUsers" hash that the former
+// Node socket handler (src/socket/index.ts) maintained.
 package presence
 
 import (
@@ -26,8 +26,8 @@ type Presence struct {
 	rdb *redis.Client
 }
 
-// New mirrors src/config/redis.ts: host and port are separate, and a password
-// means the "default" ACL user.
+// New mirrors chat-service's config/redis.ts: host and port are separate, and
+// a password means the "default" ACL user.
 func New(host, port, password string) *Presence {
 	opts := &redis.Options{Addr: net.JoinHostPort(host, port)}
 	if password != "" {

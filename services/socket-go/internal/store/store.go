@@ -1,5 +1,5 @@
 // Package store writes to the same MongoDB collections as the Mongoose models
-// in src/models. Documents must stay byte-compatible with what Mongoose writes
+// in services/chat-service/src/models. Documents must stay byte-compatible with what Mongoose writes
 // (ObjectId refs, createdAt/updatedAt timestamps, __v), because the Node REST
 // API reads them back.
 package store
@@ -111,7 +111,7 @@ func (s *Store) FCMToken(ctx context.Context, userID string) (string, error) {
 }
 
 // FindOrCreateConversation finds the conversation containing both users, or
-// creates one. Same query as src/socket/index.ts (participants $all).
+// creates one. Same query ($all participants) as the former Node handler.
 func (s *Store) FindOrCreateConversation(ctx context.Context, a, b string) (bson.ObjectID, error) {
 	aID, err := bson.ObjectIDFromHex(a)
 	if err != nil {

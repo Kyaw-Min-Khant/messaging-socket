@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:1500";
-  // expense-service is a separate local process (not part of the monolith) —
+  // expense-service is a separate local process (not part of chat-service) —
   // proxied directly here so local dev doesn't require running the gateway.
   const expenseApiProxyTarget =
     env.VITE_EXPENSE_API_PROXY_TARGET || "http://localhost:4004";

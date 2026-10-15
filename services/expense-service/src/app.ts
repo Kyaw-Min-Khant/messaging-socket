@@ -45,7 +45,7 @@ app.get("/v1/api/health", async (_req, res) => {
 });
 
 // Rate limiting lives in the gateway, not here — see the note in src/app.ts
-// of the monolith. Behind the gateway req.ip is the hop address, so a per-IP
+// of chat-service. Behind the gateway req.ip is the hop address, so a per-IP
 // limit at this layer is a single global bucket.
 
 // Docs are public so you can read the spec without the gateway. Try it out
