@@ -100,7 +100,7 @@ export const login = async (
     setAuthCookie(res, token);
     res.json({
       success: true,
-      data: { user },
+      data: { user, token },
       message: "Login successful",
     });
   } catch (error) {
