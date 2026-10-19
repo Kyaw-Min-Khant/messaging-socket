@@ -45,16 +45,19 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
     const cookieToken = (req as Request & { cookies?: Record<string, string> })
       .cookies?.token;
 
-    if (!cookieToken) {
+    const bearerToken = req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined;
+
+    const token = cookieToken ?? bearerToken;
+
+    if (!token) {
       return res.status(401).json({
         success: false,
         error: "Access denied. No token provided.",
       });
     }
-    const decoded = jwt.verify(
-      cookieToken,
-      process.env.JWT_SECRET!,
-    ) as JwtPayload;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
     const user = await getCachedUser(decoded.userId);
 
     if (!user) {
