@@ -63,6 +63,13 @@ func newHandler(cfg *config.Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Slip scans wait on an AI model, which can take far longer than CRUD.
+	scan, err := proxy.New(cfg.ExpenseURL, proxy.Options{
+		Name: "Expense service", Timeout: 60 * time.Second, InternalSecret: cfg.InternalSecret,
+	})
+	if err != nil {
+		return nil, err
+	}
 	// Same timeout + error contract as expense: without it a cold or hung
 	// chat-service holds the connection open on the path that carries auth.
 	chatService, err := proxy.New(cfg.ChatServiceURL, proxy.Options{
@@ -85,6 +92,9 @@ func newHandler(cfg *config.Config) (http.Handler, error) {
 		"Too many requests from this IP, please try again later.", cfg.TrustProxyHops)
 	auth := mw.NewRateLimiter(50, 30*time.Minute,
 		"Too many auth attempts, please try again later.", cfg.TrustProxyHops)
+	// Each scan spends AI quota (Gemini free tier), so it gets its own tight limit.
+	scanLimit := mw.NewRateLimiter(10, time.Minute,
+		"Too many slip scans, please try again in a minute.", cfg.TrustProxyHops)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health.Live)
@@ -99,6 +109,7 @@ func newHandler(cfg *config.Config) (http.Handler, error) {
 
 	mux.Handle("/v1/api/expenses", general.Middleware(expense))
 	mux.Handle("/v1/api/expenses/", general.Middleware(expense))
+	mux.Handle("/v1/api/expenses/scan", general.Middleware(scanLimit.Middleware(scan)))
 
 	// Auth requests count against both limiters, as in the Node gateway.
 	authLimited := general.Middleware(auth.Middleware(chatService))

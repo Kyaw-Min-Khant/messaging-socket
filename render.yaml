@@ -106,6 +106,12 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      # Slip scan (POST /v1/api/expenses/scan). Key from aistudio.google.com.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Optional; defaults to gemini-3.5-flash-lite (see src/services/scan_service.ts).
+      - key: GEMINI_MODEL
+        sync: false
 
   # ── Socket service (Go) — Socket.IO (public URL, gateway-only via secret) ──
   # Reads the same Mongo/Redis/Firebase variables as chat-service.
