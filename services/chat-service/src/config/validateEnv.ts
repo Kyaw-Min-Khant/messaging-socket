@@ -18,6 +18,9 @@ const REQUIRED_PRODUCTION = [
   "FIREBASE_PRIVATE_KEY_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_CLIENT_ID",
+  "SMTP_HOST",
+  "SMTP_USER",
+  "SMTP_PASS",
 ] as const;
 
 const REQUIRED_DEVELOPMENT = ["JWT_SECRET", "DEV_MONGODB_URI"] as const;
@@ -28,6 +31,7 @@ const RECOMMENDED: Record<string, string> = {
     "defaults to 6379 — wrong for hosted Redis, which uses a custom port",
   REDIS_PASSWORD:
     "hosted Redis requires auth; without it the connection is refused",
+  SMTP_HOST: "sign-up codes can't be emailed, so nobody can register",
   // INTERNAL_SECRET is warned about in app.ts, at the point it is used.
 };
 

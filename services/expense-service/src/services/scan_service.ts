@@ -11,7 +11,10 @@ const prompt = (categoryNames: string[]) =>
   "paymentMethod = KBZ_PAY for KBZPay, AYA_PAY for AYA Pay, ONLINE_PAYMENT for other banking apps or cards, " +
   "CASH for paper receipts; " +
   'date = the date on the slip as YYYY-MM-DD, or "" if none; ' +
-  "note = the merchant or purpose in under 60 characters, in English.";
+  "note = a detailed note in English, under 400 characters: " +
+  'for a ride (Grab, taxi, etc.) the service and route as "Grab: <pickup> → <drop-off>"; ' +
+  'for food or shopping the merchant then every item with quantity, e.g. "Feel: 2x Mohinga, 1x Lime Juice"; ' +
+  "otherwise the merchant and purpose.";
 
 /** Reads a base64 slip image into an expense draft. Nothing is saved. */
 export async function scanSlip(

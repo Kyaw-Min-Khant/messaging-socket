@@ -7,6 +7,30 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "../services/custom_error_service";
+import {
+  clearRegisterOtp,
+  sendRegisterOtp,
+  verifyRegisterOtp,
+} from "../services/otp_service";
+
+// @desc    Email a sign-up code
+// @route   POST /api/auth/register/send-otp
+export const sendOtp = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { email } = req.body ?? {};
+    if (typeof email !== "string" || !/^\S+@\S+\.\S+$/.test(email)) {
+      throw new ValidationError("A valid email is required");
+    }
+    await sendRegisterOtp(email);
+    res.json({ success: true, message: "Verification code sent" });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const register = async (
   req: Request,
@@ -14,9 +38,9 @@ export const register = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const { username, email, password }: RegisterRequest = req.body;
+    const { username, email, password, otp }: RegisterRequest = req.body;
 
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !otp) {
       throw new ValidationError("All fields are required");
     }
 
@@ -26,11 +50,14 @@ export const register = async (
       );
     }
 
+    await verifyRegisterOtp(email, otp);
     await auth_service.register({
       username,
       email,
       password,
     });
+    // Cleared only after the account exists, so a taken username doesn't burn the code.
+    await clearRegisterOtp(email);
 
     res.status(201).json({
       success: true,

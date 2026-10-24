@@ -1,14 +1,35 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register } from '../api/auth';
+import axios from 'axios';
+import { register, sendRegisterOtp } from '../api/auth';
 import toast from 'react-hot-toast';
+
+// Prefer the server's message ("Wrong code") over axios's "Request failed with status code 400".
+const errorMessage = (err: unknown, fallback: string) =>
+  (axios.isAxiosError(err) && err.response?.data?.message) ||
+  (err instanceof Error ? err.message : fallback);
 
 export function Register() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const sendCode = async () => {
+    setLoading(true);
+    try {
+      await sendRegisterOtp(email);
+      setCodeSent(true);
+      toast.success(`Code sent to ${email}`);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Couldn't send the code"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -20,14 +41,17 @@ export function Register() {
       toast.error('Password must be at least 6 characters');
       return;
     }
+    if (!codeSent) {
+      await sendCode();
+      return;
+    }
     setLoading(true);
     try {
-      await register(username.trim(), email, password);
+      await register(username.trim(), email, password, otp.trim());
       toast.success('Account created! Please sign in.');
       navigate('/login');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Registration failed';
-      toast.error(msg);
+      toast.error(errorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
@@ -74,7 +98,10 @@ export function Register() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setCodeSent(false);
+              }}
               required
               autoComplete="email"
               placeholder="you@example.com"
@@ -98,6 +125,37 @@ export function Register() {
             />
           </div>
 
+          {codeSent && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-gray-300">
+                  Verification code
+                </label>
+                <button
+                  type="button"
+                  onClick={sendCode}
+                  disabled={loading}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-60 transition-colors"
+                >
+                  Resend
+                </button>
+              </div>
+              <input
+                type="text"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                required
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                autoComplete="one-time-code"
+                autoFocus
+                placeholder="6-digit code from your email"
+                className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-500 rounded-xl px-4 py-2.5 text-sm tracking-widest focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -106,10 +164,12 @@ export function Register() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Creating account...
+                {codeSent ? 'Creating account...' : 'Sending code...'}
               </span>
+            ) : codeSent ? (
+              'Verify & create account'
             ) : (
-              'Create account'
+              'Send code'
             )}
           </button>
         </form>
