@@ -58,6 +58,7 @@ func TestRouting(t *testing.T) {
 	}{
 		{"/v1/api/expenses", expense},
 		{"/v1/api/expenses/budgets/1", expense},
+		{"/v1/api/expenses/scan", expense},
 		{"/v1/api/expensesX", chatService}, // prefix match is per path segment
 		{"/v1/api/users/friends", chatService},
 		{"/v1/api/auth/login", chatService},

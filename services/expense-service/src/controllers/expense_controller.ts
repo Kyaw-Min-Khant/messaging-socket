@@ -2,7 +2,9 @@ import { NextFunction, Request, Response } from "express";
 import * as expenseService from "../services/expense_service";
 import { listCategories } from "../services/category_service";
 import { getBudgetWarnings } from "../services/budget_service";
+import * as scanService from "../services/scan_service";
 import { serializeExpense } from "../utils/serializeExpense";
+import { asyncHandler } from "../utils/asyncHandler";
 import { requireUserId } from "../utils/requireUserId";
 
 export async function createExpenseController(
@@ -138,3 +140,8 @@ export async function listCategoriesController(
     next(err);
   }
 }
+
+export const scanSlipController = asyncHandler(async (req, res) => {
+  const draft = await scanService.scanSlip(requireUserId(req), req.body);
+  res.status(200).json({ success: true, data: draft });
+});

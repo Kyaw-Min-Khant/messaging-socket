@@ -580,6 +580,59 @@ export const openApiDefinition = {
       },
     },
 
+    "/v1/api/expenses/scan": {
+      post: {
+        tags: ["Expenses"],
+        summary: "Read a payment slip photo into an expense draft (AI)",
+        description:
+          "Nothing is saved: the app fills its form with the draft and the user saves it with POST /expenses. " +
+          "Any field the model could not read is null. Rate limited at the gateway (10/min).",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["image"],
+                properties: {
+                  image: { type: "string", format: "byte", description: "Base64 JPEG, PNG or WebP, up to ~6 MB" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Draft read from the slip",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        amount: { ...money, nullable: true },
+                        categoryId: { type: "string", format: "uuid", nullable: true, example: uuid },
+                        category: { type: "string", nullable: true, example: "FOOD" },
+                        paymentMethod: { ...paymentMethod, nullable: true },
+                        spentAt: { ...dateOnly, nullable: true },
+                        description: { type: "string", nullable: true, example: "Lunch at Feel" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: errorResponse("image missing or not a JPEG, PNG or WebP"),
+          503: errorResponse("AI model unavailable or could not read the slip"),
+          ...authErrors,
+        },
+      },
+    },
+
     "/v1/api/expenses/{id}": {
       parameters: [
         {

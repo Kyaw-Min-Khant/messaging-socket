@@ -7,6 +7,7 @@ import {
   getSummaryController,
   listCategoriesController,
   listExpensesController,
+  scanSlipController,
   updateExpenseController,
 } from "../controllers/expense_controller";
 import {
@@ -22,6 +23,7 @@ router.post("/categories", auth, createCategoryController);
 router.put("/categories/:id", auth, updateCategoryController);
 router.delete("/categories/:id", auth, deleteCategoryController);
 router.get("/summary", auth, getSummaryController);
+router.post("/scan", auth, scanSlipController);
 router.post("/", auth, createExpenseController);
 router.get("/", auth, listExpensesController);
 router.get("/:id", auth, getExpenseController);
