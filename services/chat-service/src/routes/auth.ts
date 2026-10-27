@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  sendOtp,
   register,
   login,
   logout,
@@ -11,6 +12,8 @@ import { auth } from "../middleware/auth";
 const router = Router();
 
 // Public routes
+// Under /register/ so the gateway's auth rate limiter covers it too.
+router.post("/register/send-otp", sendOtp);
 router.post("/register", register);
 router.post("/login", login);
 
@@ -20,6 +23,47 @@ router.post("/logout", auth as any, logout as any);
 router.put("/fcmtoken", auth as any, updateFcmToken as any);
 
 export default router;
+
+/**
+ * @openapi
+ * /v1/api/auth/register/send-otp:
+ *   post:
+ *     summary: Email a 6-digit sign-up code (valid 10 minutes, one per minute)
+ *     tags:
+ *       - Auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "johndoe@example.com"
+ *     responses:
+ *       200:
+ *         description: Code sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessMessage'
+ *       400:
+ *         description: Invalid email, email already registered, or asked again within a minute
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiError'
+ *       503:
+ *         description: The email could not be sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiError'
+ */
 
 /**
  * @openapi
@@ -38,7 +82,12 @@ export default router;
  *               - username
  *               - email
  *               - password
+ *               - otp
  *             properties:
+ *               otp:
+ *                 type: string
+ *                 description: Code from POST /v1/api/auth/register/send-otp
+ *                 example: "482913"
  *               username:
  *                 type: string
  *                 minLength: 3

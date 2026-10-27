@@ -86,6 +86,17 @@ services:
         sync: false
       - key: FIREBASE_CLIENT_ID
         sync: false
+      # Sign-up codes, read by services/chat-service/src/services/otp_service.ts.
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
       - key: APP_NAME
         value: Messaging App
 

@@ -126,6 +126,7 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  otp?: string;
 }
 
 export interface LoginRequest {
